@@ -19,7 +19,7 @@ os.chdir(Path(__file__).parent)
 
 original_argv = sys.argv[1:]
 
-# gcc and g++ as defaults matches what GYP's Makefile generator does,
+# gcc and g++ as defaults matches what GYP's Makefile generator does test1,
 # except on macOS and Windows.
 CC = os.environ.get('CC', 'cc' if sys.platform == 'darwin' else 'clang' if sys.platform == 'win32' else 'gcc')
 CXX = os.environ.get('CXX', 'c++' if sys.platform == 'darwin' else 'clang' if sys.platform == 'win32' else 'g++')
