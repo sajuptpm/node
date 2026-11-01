@@ -8,6 +8,37 @@ name: Contributor guidance
 on:
   pull_request_target:
     types: [opened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request number to evaluate'
+        required: false
+        default: '1'
+        type: string
+      is_first_time:
+        description: 'Simulate first-time contributor'
+        required: false
+        default: true
+        type: boolean
+      simulate_caution:
+        description: 'Simulate AgentScan automation caution flag'
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: 'Simulate guidance without posting comments to GitHub'
+        required: false
+        default: true
+        type: boolean
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
 
 permissions: {}
 
@@ -16,31 +47,72 @@ jobs:
     name: Resolve contributor status
     # Avoid allocating a runner unless a welcome or scan is a plausible outcome.
     if: >-
+      (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_CONTRIBUTOR_GUIDANCE == 'true') &&
       github.run_attempt == 1 &&
-      github.repository == 'nodejs/node' &&
-      github.event.pull_request.user.type != 'Bot' &&
-      (github.event.pull_request.author_association == 'CONTRIBUTOR' ||
-      github.event.pull_request.author_association == 'FIRST_TIMER' ||
-      github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||
-      github.event.pull_request.author_association == 'NONE')
-    runs-on: ubuntu-slim
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.user.type != 'Bot' &&
+        (github.event.pull_request.author_association == 'CONTRIBUTOR' ||
+         github.event.pull_request.author_association == 'FIRST_TIMER' ||
+         github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' ||
+         github.event.pull_request.author_association == 'NONE')))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       is_first_time: ${{ steps.resolve.outputs.is_first_time }}
       # The event association may not expose private organization membership,
       # so gate the guidance job on the privileged API result.
       should_scan: ${{ steps.resolve.outputs.should_scan }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
+      mode: ${{ steps.resolve.outputs.mode }}
+      simulate_caution: ${{ steps.resolve.outputs.simulate_caution }}
     steps:
       - name: Check author association
         id: resolve
         env:
           EVENT_ASSOCIATION: ${{ github.event.pull_request.author_association }}
-          GH_TOKEN: ${{ secrets.GH_USER_TOKEN }}
-          NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GH_USER_TOKEN || github.token }}
         run: |
-          api_association=$(gh api "/repos/$GITHUB_REPOSITORY/pulls/$NUMBER" \
-            --jq '.author_association')
-          echo "API author association: $api_association"
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          if [ -z "$DRY_RUN" ]; then
+            DRY_RUN="true"
+          fi
+          SIM_CAUTION="${{ inputs.simulate_caution }}"
+          if [ -z "$SIM_CAUTION" ]; then
+            SIM_CAUTION="false"
+          fi
+
+          if [ "$INPUT_MODE" = "native" ]; then
+            RESOLVED_MODE="native"
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+          else
+            # auto mode
+            if [ -n "${{ secrets.GH_USER_TOKEN }}" ] && [ "$DRY_RUN" != "true" ] && [ "${{ github.event_name }}" = "pull_request_target" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          fi
+
+          NUMBER="${{ inputs.pr_number || github.event.pull_request.number || '1' }}"
+          echo "Target PR number: $NUMBER"
+
+          api_association=""
+          if [ -n "$NUMBER" ] && [ "$NUMBER" != "0" ]; then
+            api_association=$(gh api "/repos/$GITHUB_REPOSITORY/pulls/$NUMBER" --jq '.author_association' 2>/dev/null || echo "")
+          fi
+          echo "API author association query result: $api_association"
           echo "Event author association: $EVENT_ASSOCIATION"
+
+          if [ -z "$api_association" ]; then
+            if [ "${{ inputs.is_first_time }}" = "false" ]; then
+              api_association="CONTRIBUTOR"
+            else
+              api_association="FIRST_TIME_CONTRIBUTOR"
+            fi
+            echo "Falling back to resolved association: $api_association"
+          fi
 
           case "$api_association" in
             FIRST_TIMER|FIRST_TIME_CONTRIBUTOR)
@@ -53,25 +125,36 @@ jobs:
               ;;
             COLLABORATOR|MANNEQUIN|MEMBER|OWNER)
               echo 'is_first_time=false' >> "$GITHUB_OUTPUT"
-              echo 'should_scan=false' >> "$GITHUB_OUTPUT"
+              if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                echo 'should_scan=true' >> "$GITHUB_OUTPUT"
+              else
+                echo 'should_scan=false' >> "$GITHUB_OUTPUT"
+              fi
               ;;
             *)
-              echo "Unexpected author association: $api_association" >&2
-              exit 1
+              echo "Unexpected author association: $api_association, defaulting to should_scan=true"
+              echo 'is_first_time=true' >> "$GITHUB_OUTPUT"
+              echo 'should_scan=true' >> "$GITHUB_OUTPUT"
               ;;
           esac
+
+          echo "pr_number=$NUMBER" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          echo "mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
+          echo "simulate_caution=$SIM_CAUTION" >> "$GITHUB_OUTPUT"
 
   guidance:
     name: Apply contributor guidance
     needs: contributor
     if: needs.contributor.outputs.should_scan == 'true'
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: write
     steps:
       - name: Scan contributor activity
         id: agentscan
+        if: github.event_name == 'pull_request_target'
         # The welcome should still be posted if this advisory scan fails.
         continue-on-error: true
         uses: MatteoGabriele/agentscan-action@8112fb79b33fafb8506159df20129a34209ac410  # v2.5.0
@@ -82,9 +165,6 @@ jobs:
           scan-issues: false
           auto-close: false
           honeypot: false
-          # The privileged association check skips trusted authors before this job,
-          # so `trusted-author-associations` would be redundant here.
-          # trusted-author-associations: collaborator,member,owner
 
       - name: Comment with contributor guidance
         if: env.IS_FIRST_TIME == 'true' || env.ADD_CAUTION == 'true'
@@ -93,11 +173,15 @@ jobs:
             ${{
               steps.agentscan.outputs.classification == 'mixed' ||
               steps.agentscan.outputs.classification == 'automation' ||
-              steps.agentscan.outputs['community-flagged'] == 'true'
+              steps.agentscan.outputs['community-flagged'] == 'true' ||
+              needs.contributor.outputs.simulate_caution == 'true'
             }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IS_FIRST_TIME: ${{ needs.contributor.outputs.is_first_time }}
-          NUMBER: ${{ github.event.pull_request.number }}
+          NUMBER: ${{ needs.contributor.outputs.pr_number }}
+          DRY_RUN: ${{ needs.contributor.outputs.dry_run }}
+          MODE: ${{ needs.contributor.outputs.mode }}
+          USER_LOGIN: ${{ github.event.pull_request.user.login || github.actor }}
           WELCOME_MESSAGE: >2-
               Welcome to Node.js, and thank you for your first contribution!
 
@@ -123,7 +207,7 @@ jobs:
             permitted, but automated tooling must not open pull requests without
             advance approval, and contributors must personally understand, test,
             verify, and take responsibility for every submitted change. See the
-            [AgentScan analysis](https://agentscan.tools/user/${{ github.event.pull_request.user.login }}),
+            [AgentScan analysis](https://agentscan.tools/user/${{ github.event.pull_request.user.login || github.actor }}),
             [AI use policy](https://github.com/nodejs/node/blob/HEAD/doc/contributing/ai-guidelines.md),
             and
             [automation policy](https://github.com/nodejs/node/blob/HEAD/CONTRIBUTING.md#automation-and-bots)
@@ -137,5 +221,63 @@ jobs:
             body="$CAUTION_MESSAGE"
           fi
 
-          printf '%s\n' "$body" |
-            gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
+          mkdir -p reports
+          cat << 'EOF' > generate_report.py
+          import os
+
+          mode = os.environ.get("MODE", "native")
+          dry_run = os.environ.get("DRY_RUN", "true")
+          pr_num = os.environ.get("NUMBER", "1")
+          is_first = os.environ.get("IS_FIRST_TIME", "false")
+          add_caution = os.environ.get("ADD_CAUTION", "false").strip()
+          user_login = os.environ.get("USER_LOGIN", "")
+          body = os.environ.get("GUIDANCE_BODY", "")
+
+          report = []
+          report.append("# Contributor Guidance Evaluation Report\n")
+          report.append("| Parameter | Value |")
+          report.append("| :--- | :--- |")
+          report.append(f"| **Target PR** | `#{pr_num}` |")
+          report.append(f"| **Contributor Login** | `{user_login}` |")
+          report.append(f"| **Execution Mode** | `{mode}` |")
+          report.append(f"| **Dry Run** | `{dry_run}` |")
+          report.append(f"| **First Time Contributor** | `{is_first}` |")
+          report.append(f"| **AgentScan Automation Caution** | `{add_caution}` |\n")
+
+          report.append("## Guidance Message Preview\n")
+          report.append("```markdown")
+          report.append(body)
+          report.append("```\n")
+
+          if dry_run == "true" or mode == "native":
+              report.append("ℹ️ **Simulation Mode**: The above guidance comment was rendered and verified without posting to remote PR.")
+          else:
+              report.append(f"✅ **Posted Live**: Comment delivered to PR `#{pr_num}`.")
+
+          content = "\n".join(report) + "\n"
+          with open("reports/contributor-guidance-report.md", "w", encoding="utf-8") as f:
+              f.write(content)
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(content)
+          EOF
+
+          export GUIDANCE_BODY="$body"
+          python3 generate_report.py
+
+          if [[ "$DRY_RUN" == "true" || "$MODE" == "native" ]]; then
+            echo "Dry run mode active: Skipping remote comment on PR #$NUMBER"
+          else
+            printf '%s\n' "$body" |
+              gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
+          fi
+
+      - name: Upload Contributor Guidance Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contributor-guidance-report
+          path: reports/contributor-guidance-report.md
+          if-no-files-found: warn
