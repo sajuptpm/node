@@ -72,7 +72,31 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41363977085`](https://github.com/sajuptpm/node/actions/runs/41363977085)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41363977085](https://github.com/sajuptpm/node/actions/runs/41363977085)
+- **Workflow**: Label Flaky Test Issues (`.github/workflows/label-flaky-test-issue.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `issue_number: ""`, `issue_body: "Platform\n\nLinux x64, macOS ARM64, Windows\n\nOther details"`, `apply_labels: false`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 5s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `label` | Set up job | Completed | 2s |
+| `label` | Resolve Configuration & Inputs | Completed | 1s |
+| `label` | Extract labels | Completed | 1s |
+| `label` | Add labels | Completed | 0s |
+| `label` | Generate Summary Report | Completed | 1s |
+| `label` | Upload Flaky Test Labels Report | Completed | 0s |
+| `label` | Complete job | Completed | 0s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `flaky-test-labels-report` | ~1.1 KB | Label extraction summary report with mapped platform labels (`linux,macos,windows`) |
 
 ---
 
