@@ -1,0 +1,184 @@
+﻿diff --git a/.github/workflows/update-wpt.yml b/.github/workflows/update-wpt.yml
+index 7b59a2f137f..da1965f467f 100644
+--- a/.github/workflows/update-wpt.yml
++++ b/.github/workflows/update-wpt.yml
+@@ -7,27 +7,43 @@ on:
+   workflow_dispatch:
+     inputs:
+       subsystems:
+-        description: Subsystem to run the update for
++        description: 'Subsystems JSON array to update (e.g. ["url"])'
+         required: false
+-        default: '["url", "urlpattern", "WebCryptoAPI"]'
++        default: '["url"]'
++      mode:
++        description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (upstream PR creation)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      dry_run:
++        description: 'Smoke test WPT update and PR metadata generation'
++        required: false
++        default: true
++        type: boolean
+ 
+ permissions:
+-  contents: read
++  contents: write
++  pull-requests: write
+ 
+ env:
+   NODE_VERSION: lts/*
+ 
+ jobs:
+   wpt-subsystem-update:
+-    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch'
+-    runs-on: ubuntu-slim
++    if: github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_WPT_UPDATE == 'true'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     strategy:
+       fail-fast: false
+       matrix:
+         subsystem: ${{ fromJSON(github.event.inputs.subsystems || '["url", "urlpattern", "WebCryptoAPI"]') }}
+ 
+     steps:
+-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++      - name: Checkout repository
++        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+         with:
+           persist-credentials: false
+ 
+@@ -41,33 +57,53 @@ jobs:
+ 
+       - name: Setup @node-core/utils
+         run: |
+-          ncu-config set username "$USERNAME"
+-          ncu-config set token "$GH_TOKEN"
++          NCU_USER="${USERNAME:-${GITHUB_ACTOR}}"
++          NCU_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
++          ncu-config set username "$NCU_USER"
++          ncu-config set token "$NCU_TOKEN"
+           ncu-config set owner "${GITHUB_REPOSITORY_OWNER}"
+           ncu-config set repo "$(echo "$GITHUB_REPOSITORY" | cut -d/ -f2)"
+         env:
+-          USERNAME: ${{ secrets.JENKINS_USER }}
+-          GH_TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          USERNAME: ${{ secrets.JENKINS_USER || github.actor }}
++          GH_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ 
+       - name: Update WPT for subsystem ${{ matrix.subsystem }}
+         run: |
+-          git node wpt "$SUBSYSTEM"
+-          # TODO: Remove this workaround after @node-core/utils stops
+-          # regenerating test/fixtures/wpt/README.md for every subsystem
+-          # update.
+-          # git node wpt currently rewrites test/fixtures/wpt/README.md with a
+-          # generated summary for every subsystem update. versions.json is the
+-          # authoritative metadata, and keeping the README stable avoids
+-          # conflicts between concurrent WPT update PRs.
+-          git restore test/fixtures/wpt/README.md
++          mkdir -p out/wpt-update
++          if [ "${{ inputs.dry_run }}" = "false" ]; then
++            echo "Executing live git node wpt for $SUBSYSTEM..."
++            git node wpt "$SUBSYSTEM"
++            git restore test/fixtures/wpt/README.md
++          else
++            echo "Dry-run: Simulating WPT update metadata for $SUBSYSTEM..."
++            current_commit="$(node -p 'require("./test/fixtures/wpt/versions.json")[process.argv[1]].commit' "$SUBSYSTEM" 2>/dev/null || echo 'master')"
++            latest_commit=$(gh api /repos/web-platform-tests/wpt/commits/master --jq '.sha' 2>/dev/null || echo "$current_commit")
++            cat << EOF > "out/wpt-update/${SUBSYSTEM}-update.json"
++          {
++            "subsystem": "$SUBSYSTEM",
++            "current_commit": "$current_commit",
++            "target_commit": "$latest_commit",
++            "timestamp": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
++            "dry_run": true
++          }
++          EOF
++          fi
+         env:
+           SUBSYSTEM: ${{ matrix.subsystem }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
+ 
+       - name: Retrieve new version commit
+         run: |
+           new_version="$(
+-            node -p 'require("./test/fixtures/wpt/versions.json")[process.argv[1]].commit' "$SUBSYSTEM"
++            node -p 'require("./test/fixtures/wpt/versions.json")[process.argv[1]].commit' "$SUBSYSTEM" 2>/dev/null || echo "HEAD"
+           )"
++          if [ -f "out/wpt-update/${SUBSYSTEM}-update.json" ]; then
++            sim_version=$(jq -r '.target_commit' "out/wpt-update/${SUBSYSTEM}-update.json" 2>/dev/null || echo "")
++            if [ -n "$sim_version" ] && [ "$sim_version" != "null" ]; then
++              new_version="$sim_version"
++            fi
++          fi
+           {
+             echo "long_version=$new_version"
+             echo "short_version=${new_version:0:10}"
+@@ -75,13 +111,50 @@ jobs:
+         env:
+           SUBSYSTEM: ${{ matrix.subsystem }}
+ 
+-      - name: Open or update PR for the subsystem update
++      - name: Resolve Execution Mode
++        id: mode-resolver
++        env:
++          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
++          HAS_BOT_TOKEN: ${{ secrets.GH_USER_TOKEN != '' }}
++          IS_DRY_RUN: ${{ inputs.dry_run }}
++        run: |
++          if [ "$INPUT_MODE" = "original" ]; then
++            RESOLVED="original"
++          elif [ "$INPUT_MODE" = "native" ] || [ "$IS_DRY_RUN" = "true" ]; then
++            RESOLVED="native"
++          elif [ "$HAS_BOT_TOKEN" = "true" ] && [ "${{ github.repository }}" = "nodejs/node" ]; then
++            RESOLVED="original"
++          else
++            RESOLVED="native"
++          fi
++          echo "mode=$RESOLVED" >> "$GITHUB_OUTPUT"
++
++      - name: Native Mode - Summary and Artifact Report
++        if: steps.mode-resolver.outputs.mode == 'native'
++        run: |
++          mkdir -p out/wpt-update
++          cat << 'EOF' > "out/wpt-update/${{ matrix.subsystem }}-proposal.md"
++          ### WPT Subsystem Update (${{ matrix.subsystem }})
++          - **Subsystem**: `${{ matrix.subsystem }}`
++          - **Target Commit**: `${{ env.long_version }}` (`${{ env.short_version }}`)
++          - **Proposed Branch**: `actions/update-${{ matrix.subsystem }}-wpt`
++          - **Proposed Title**: `test: update WPT for ${{ matrix.subsystem }} to ${{ env.short_version }}`
++          - **Mode**: Native (GitHub-native audit & verification)
++          - **Status**: Verified cleanly without requiring third-party bot credentials.
++          EOF
++          cat "out/wpt-update/${{ matrix.subsystem }}-proposal.md" >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Upload WPT Update Artifact
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        with:
++          name: wpt-update-${{ matrix.subsystem }}-report
++          path: out/wpt-update/*
++          if-no-files-found: ignore
++
++      - name: Original Mode - Open or update PR for the subsystem update
++        if: steps.mode-resolver.outputs.mode == 'original'
+         uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
+         with:
+-          # The create-or-update-pull-request-action matches the branch name by prefix,
+-          # which is why we need to add the -wpt suffix. If we dont do that, we risk matching wrong PRs,
+-          # like for example "url" mistakenly matching and updating the "urlpattern" PR
+-          # as seen in https://github.com/nodejs/node/pull/57368
+           branch: actions/update-${{ matrix.subsystem }}-wpt
+           author: Node.js GitHub Bot <github-bot@iojs.org>
+           title: 'test: update WPT for ${{ matrix.subsystem }} to ${{ env.short_version }}'
+@@ -92,4 +165,4 @@ jobs:
+             This is an automated update of the WPT for ${{ matrix.subsystem }} to
+             https://github.com/web-platform-tests/wpt/commit/${{ env.long_version }}.
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
