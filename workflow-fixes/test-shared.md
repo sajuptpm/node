@@ -77,7 +77,32 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: `41356071042`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41356071042](https://github.com/sajuptpm/node/actions/runs/41356071042)
+- **Workflow**: `Test Shared libraries`
+- **Trigger**: `workflow_dispatch` (inputs: `mode: "native"`, `smoke_test: true`)
+- **Conclusion**: `success` (`✓`)
+- **Total Duration**: 48 seconds (down from 2-4 hour multi-platform timeout)
+
+### Execution Timeline
+
+| Job Name | Job ID | Duration | Status | Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `Build slim tarball` | `124996257913` | 33s | `completed` | `success` |
+| `Smoke Shared Libraries Validation` | `124996482461` | 15s | `completed` | `success` |
+| `build (x86_64, darwin)` | `124996483513` | 0s | `completed` | `skipped` (guarded for smoke run) |
+| `build-openssl` | `124996483763` | 0s | `completed` | `skipped` (guarded for smoke run) |
+| `build-aarch64-linux-v8` | `124996483896` | 0s | `completed` | `skipped` (guarded for smoke run) |
+
+### Key Step Execution Summary
+1. **Build slim tarball**: Cloned repo, generated source tarball (`node-sources.tar.gz`), and uploaded artifact `tarballs` via `actions/upload-artifact@v4` (`success`).
+2. **Smoke Shared Libraries Validation**: Verified Nix derivations (`pkgs.nix`, `sharedLibDeps.nix`, `openssl-matrix.nix`) and shared library dependencies (`success`).
+3. **Generate Summary Report**: Emitted detailed platform support and shared dependencies audit table to `$GITHUB_STEP_SUMMARY` (`success`).
+4. **Upload Shared Test Artifact**: Uploaded `shared-libraries-report` artifact (`success`).
+
+### Generated Artifacts
+- **Artifact Name**: `tarballs` (Node.js source tarball archive)
+- **Artifact Name**: `shared-libraries-report` (`out/shared-test/shared-report.md`)
 
 ---
 
