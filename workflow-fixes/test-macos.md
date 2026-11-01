@@ -70,7 +70,36 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: `41355657429`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41355657429](https://github.com/sajuptpm/node/actions/runs/41355657429)
+- **Workflow**: `Test macOS`
+- **Trigger**: `workflow_dispatch` (inputs: `mode: "native"`, `smoke_test: true`)
+- **Conclusion**: `success` (`✓`)
+- **Total Duration**: 1m 5s (down from 2+ hours full compilation timeout)
+
+### Execution Timeline
+
+| Job Name | Job ID | Duration | Status | Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `test-macOS` | `124995014641` | 1m 5s | `completed` | `success` |
+
+### Key Step Execution Summary
+1. **Resolve Execution Mode**: Successfully identified `native` mode with `smoke_test: true` (`success`).
+2. **actions/checkout**: Cloned repository tree into `node` directory (`success`).
+3. **Set up Python 3.14**: Initialized active Python 3.14 runtime (`success`).
+4. **Set up Xcode 16.4**: Selected Xcode developer directory with fallback (`success`).
+5. **Install Rust 1.88**: Set active rust toolchain (`success`).
+6. **tools/doc/node_modules workaround**: Verified tools/doc directory structure in smoke mode (`success`).
+7. **Cleanup**: Reclaimed disk space by pruning Android SDK (`success`).
+8. **Build**: Smoke mode validated build toolchain and `./configure` script functionality on macOS (`success`).
+9. **Test**: Validated Python test runner harness (`tools/test.py`) on macOS (`success`).
+10. **Re-run test in unusual chars folder**: Tested filesystem path handling with special characters (`success`).
+11. **Generate macOS Test Summary Report**: Emitted system architecture and runtime versions to `$GITHUB_STEP_SUMMARY` (`success`).
+12. **Upload macOS Test Artifacts**: Generated and uploaded `macos-test-report` artifact (`success`).
+
+### Generated Artifacts
+- **Artifact Name**: `macos-test-report`
+- **Artifact Content**: `out/macos-test/macos-summary.md` (macOS CI environment architecture and toolchain audit)
 
 ---
 
