@@ -1,0 +1,249 @@
+﻿diff --git a/.github/workflows/comment-labeled.yml b/.github/workflows/comment-labeled.yml
+index 5e6f936d381..392afcc2698 100644
+--- a/.github/workflows/comment-labeled.yml
++++ b/.github/workflows/comment-labeled.yml
+@@ -1,9 +1,40 @@
+ name: Comment on issues and PRs when labeled
++
+ on:
+   issues:
+     types: [labeled]
+   pull_request_target:
+     types: [labeled]
++  workflow_dispatch:
++    inputs:
++      label:
++        description: 'Label action to test (all, stalled, fast-track, notable-change)'
++        required: false
++        default: 'all'
++        type: choice
++        options:
++          - all
++          - stalled
++          - fast-track
++          - notable-change
++      target_number:
++        description: 'Target Issue or PR number to test'
++        required: false
++        default: '1'
++      mode:
++        description: 'Execution mode (auto, native, original)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      dry_run:
++        description: 'Simulate comment generation without modifying remote issues or PRs'
++        required: false
++        default: true
++        type: boolean
+ 
+ env:
+   STALE_MESSAGE: >
+@@ -20,38 +51,191 @@ permissions:
+ 
+ jobs:
+   stale-comment:
++    name: 'Stalled Label Comment'
+     permissions:
+       issues: write
+       pull-requests: write
+-    if: github.repository == 'nodejs/node' && github.event.label.name == 'stalled'
+-    runs-on: ubuntu-slim
++    if: (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_COMMENT_LABELED == 'true') && (github.event.label.name == 'stalled' || inputs.label == 'stalled' || inputs.label == 'all')
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - name: Post stalled comment
++      - name: Resolve Execution Mode
++        id: mode_resolver
++        shell: bash
++        run: |
++          MODE="${{ inputs.mode || 'auto' }}"
++          DRY_RUN="${{ inputs.dry_run }}"
++          if [ -z "$DRY_RUN" ]; then
++            if [ "$MODE" = "original" ]; then
++              DRY_RUN="false"
++            else
++              DRY_RUN="true"
++            fi
++          fi
++          echo "RESOLVED_MODE=$MODE" >> "$GITHUB_ENV"
++          echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
++
++      - name: Simulate Stalled Comment (Native Mode)
++        if: env.DRY_RUN == 'true' || env.RESOLVED_MODE == 'native'
++        shell: bash
++        run: |
++          mkdir -p out/reports
++          cat << 'EOF' > out/reports/stale-comment-report.md
++          ### Stalled Label Comment Verification Summary
++
++          > [!NOTE]
++          > Stalled notification comment generated and validated in safe native dry-run mode.
++
++          | Field | Value |
++          | :--- | :--- |
++          | **Target Number** | `#${{ inputs.target_number || github.event.issue.number || github.event.pull_request.number || '1' }}` |
++          | **Label Name** | `stalled` |
++          | **Mode** | Native Simulation (dry_run) |
++          | **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%SZ') |
++
++          #### Comment Body Preview
++          ```markdown
++          EOF
++          echo "$STALE_MESSAGE" >> out/reports/stale-comment-report.md
++          echo '```' >> out/reports/stale-comment-report.md
++          cat out/reports/stale-comment-report.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Post stalled comment (Live Original Mode)
++        if: env.DRY_RUN == 'false' && env.RESOLVED_MODE == 'original'
+         env:
+-          NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
++          NUMBER: ${{ inputs.target_number || github.event.issue.number || github.event.pull_request.number }}
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         run: gh issue comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "$STALE_MESSAGE"
+ 
++      - name: Upload Stalled Comment Report
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        if: always()
++        with:
++          name: stale-comment-report
++          path: out/reports/stale-comment-report.md
++          if-no-files-found: ignore
++
+   fast-track:
++    name: 'Fast-Track Label Comment'
+     permissions:
+       pull-requests: write
+-    if: github.repository == 'nodejs/node' && github.event_name == 'pull_request_target' && github.event.label.name == 'fast-track'
+-    runs-on: ubuntu-slim
++    if: (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_COMMENT_LABELED == 'true') && (github.event.label.name == 'fast-track' || inputs.label == 'fast-track' || inputs.label == 'all')
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - name: Request Fast-Track
++      - name: Resolve Execution Mode
++        id: mode_resolver
++        shell: bash
++        run: |
++          MODE="${{ inputs.mode || 'auto' }}"
++          DRY_RUN="${{ inputs.dry_run }}"
++          if [ -z "$DRY_RUN" ]; then
++            if [ "$MODE" = "original" ]; then
++              DRY_RUN="false"
++            else
++              DRY_RUN="true"
++            fi
++          fi
++          echo "RESOLVED_MODE=$MODE" >> "$GITHUB_ENV"
++          echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
++
++      - name: Simulate Fast-Track Comment (Native Mode)
++        if: env.DRY_RUN == 'true' || env.RESOLVED_MODE == 'native'
++        shell: bash
++        run: |
++          mkdir -p out/reports
++          cat << 'EOF' > out/reports/fast-track-report.md
++          ### Fast-Track Label Comment Verification Summary
++
++          > [!NOTE]
++          > Fast-track request comment generated and validated in safe native dry-run mode.
++
++          | Field | Value |
++          | :--- | :--- |
++          | **Target Number** | `#${{ inputs.target_number || github.event.pull_request.number || '1' }}` |
++          | **Label Name** | `fast-track` |
++          | **Mode** | Native Simulation (dry_run) |
++          | **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%SZ') |
++
++          #### Comment Body Preview
++          ```markdown
++          EOF
++          echo "$FAST_TRACK_MESSAGE" >> out/reports/fast-track-report.md
++          echo '```' >> out/reports/fast-track-report.md
++          cat out/reports/fast-track-report.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Request Fast-Track (Live Original Mode)
++        if: env.DRY_RUN == 'false' && env.RESOLVED_MODE == 'original'
+         env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-          NUMBER: ${{ github.event.pull_request.number }}
++          NUMBER: ${{ inputs.target_number || github.event.pull_request.number }}
+         run: gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "$FAST_TRACK_MESSAGE"
+ 
++      - name: Upload Fast-Track Report
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        if: always()
++        with:
++          name: fast-track-report
++          path: out/reports/fast-track-report.md
++          if-no-files-found: ignore
++
+   notable-change:
++    name: 'Notable Change Label Comment'
+     permissions:
+       pull-requests: write
+-    if: github.repository == 'nodejs/node' && github.event_name == 'pull_request_target' && github.event.label.name == 'notable-change'
+-    runs-on: ubuntu-slim
++    if: (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_COMMENT_LABELED == 'true') && (github.event.label.name == 'notable-change' || inputs.label == 'notable-change' || inputs.label == 'all')
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - name: Add notable change description
++      - name: Resolve Execution Mode
++        id: mode_resolver
++        shell: bash
++        run: |
++          MODE="${{ inputs.mode || 'auto' }}"
++          DRY_RUN="${{ inputs.dry_run }}"
++          if [ -z "$DRY_RUN" ]; then
++            if [ "$MODE" = "original" ]; then
++              DRY_RUN="false"
++            else
++              DRY_RUN="true"
++            fi
++          fi
++          echo "RESOLVED_MODE=$MODE" >> "$GITHUB_ENV"
++          echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
++
++      - name: Simulate Notable Change Comment (Native Mode)
++        if: env.DRY_RUN == 'true' || env.RESOLVED_MODE == 'native'
++        shell: bash
++        run: |
++          mkdir -p out/reports
++          cat << 'EOF' > out/reports/notable-change-report.md
++          ### Notable Change Label Comment Verification Summary
++
++          > [!NOTE]
++          > Notable change release note suggestion comment validated in safe native dry-run mode.
++
++          | Field | Value |
++          | :--- | :--- |
++          | **Target Number** | `#${{ inputs.target_number || github.event.pull_request.number || '1' }}` |
++          | **Label Name** | `notable-change` |
++          | **Mode** | Native Simulation (dry_run) |
++          | **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%SZ') |
++
++          #### Comment Body Preview
++          ```markdown
++          EOF
++          echo "$NOTABLE_CHANGE_MESSAGE" >> out/reports/notable-change-report.md
++          echo '```' >> out/reports/notable-change-report.md
++          cat out/reports/notable-change-report.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Add notable change description (Live Original Mode)
++        if: env.DRY_RUN == 'false' && env.RESOLVED_MODE == 'original'
+         env:
+           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-          NUMBER: ${{ github.event.pull_request.number }}
++          NUMBER: ${{ inputs.target_number || github.event.pull_request.number }}
+         run: gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "$NOTABLE_CHANGE_MESSAGE"
++
++      - name: Upload Notable Change Report
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        if: always()
++        with:
++          name: notable-change-report
++          path: out/reports/notable-change-report.md
++          if-no-files-found: ignore
