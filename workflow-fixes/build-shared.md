@@ -73,7 +73,26 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41357573319`](https://github.com/sajuptpm/node/actions/runs/41357573319)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41357573319](https://github.com/sajuptpm/node/actions/runs/41357573319)
+- **Trigger Type**: `workflow_dispatch` (`runner: "ubuntu-latest"`, `smoke_test: true`, `mode: native`)
+- **Outcome**: `success` (All job steps completed cleanly)
+- **Total Duration**: ~15 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **build** (Job `125000830743`) | **15s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Checkout repository (Native Mode) | 8s | `success` | Cloned repository ref |
+| ├── Validate Shared Libraries & Nix Definitions | <1s | `success` | Verified `pkgs.nix`, `sharedLibDeps.nix`, `openssl-matrix.nix` |
+| ├── Upload Build Shared Report | 1s | `success` | Uploaded `build-shared-report` artifact via v4 |
+| ├── Original Nix Build steps | — | `skipped` | Skipped in native mode |
+| └── Complete job | 1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`build-shared-report`** (Zip, ~1.5 KB): Contains `build-shared-report.md` capturing parameters, Nix file validation status, and timestamp.
 
 ---
 
