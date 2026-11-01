@@ -83,7 +83,40 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41357280994`](https://github.com/sajuptpm/node/actions/runs/41357280994)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41357280994](https://github.com/sajuptpm/node/actions/runs/41357280994)
+- **Trigger Type**: `workflow_dispatch` (`smoke_test: true`, `mode: native`, `category: "misc"`, `filter: "arguments"`)
+- **Outcome**: `success` (All pipeline stages completed cleanly)
+- **Total Duration**: ~27 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Initialize Benchmark Matrix** (Job `124999954275`) | **2s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Matrix | <1s | `success` | Selected single `ubuntu-latest` x86_64 runner |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **x86_64-linux: with shared libraries** (Job `124999971436`) | **13s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Checkout repository (Native Mode) | 8s | `success` | Fast shallow checkout via v4 |
+| ├── Setup Node.js (Native Mode) | <1s | `success` | Node.js v22 pre-cached setup |
+| ├── Run Smoke Benchmark (Native Mode) | <1s | `success` | Executed `misc/arguments` test benchmark |
+| ├── Nix / Compilation steps (Original) | — | `skipped` | Skipped in native mode (unneeded) |
+| ├── Upload raw benchmark results | 1s | `success` | Uploaded `csv-x86_64-linux` artifact via v4 |
+| └── Complete job | 1s | `success` | Clean teardown |
+| **Aggregate benchmark results** (Job `125000032968`) | **8s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Run actions/checkout@v4 | 2s | `success` | Checkout repository files |
+| ├── Download benchmark raw results | 1s | `success` | Downloaded `csv-*` via v4 |
+| ├── Benchmark results (Native Mode) | <1s | `success` | Aggregated CSV & formatted summary table |
+| ├── Original Nix / Comment steps | — | `skipped` | Skipped in native mode |
+| ├── Upload Aggregated Benchmark Report | 1s | `success` | Uploaded `benchmark-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`csv-x86_64-linux`** (Zip, ~1.5 KB): Raw benchmark CSV output containing execution rate and timings.
+- **`benchmark-report`** (Zip, ~2 KB): Formatted Markdown summary report (`benchmark-report.md`) with benchmark metrics and aggregated CSV table.
 
 ---
 
