@@ -82,7 +82,39 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41361989107`](https://github.com/sajuptpm/node/actions/runs/41361989107)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41361989107](https://github.com/sajuptpm/node/actions/runs/41361989107)
+- **Workflow**: Coverage Windows (`.github/workflows/coverage-windows.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `test_scope: smoke`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `windows-2025`
+- **Total Duration**: 1m 32s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `coverage-windows` | Set up job | Completed | 3s |
+| `coverage-windows` | Run actions/checkout@v4 | Completed | 21s |
+| `coverage-windows` | Set up Python 3.14 | Completed | 4s |
+| `coverage-windows` | Install deps | Completed | 18s |
+| `coverage-windows` | Install Rust 1.88 | Completed | 16s |
+| `coverage-windows` | Build | Completed | 1s |
+| `coverage-windows` | Test | Completed | 1s |
+| `coverage-windows` | Report | Completed | 1s |
+| `coverage-windows` | Clean tmp | Completed | 1s |
+| `coverage-windows` | Generate Coverage Summary (Native Mode) | Completed | 1s |
+| `coverage-windows` | Upload to Codecov (Original Mode) | Skipped | 0s |
+| `coverage-windows` | Upload Coverage Artifacts (Native Mode) | Completed | 3s |
+| `coverage-windows` | Post Set up Python 3.14 | Completed | 1s |
+| `coverage-windows` | Post Run actions/checkout@v4 | Completed | 2s |
+| `coverage-windows` | Complete job | Completed | 1s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `coverage-windows-report` | ~1.5 KB | Windows coverage validation summary report and mock coverage report archive |
 
 ---
 
