@@ -1,0 +1,129 @@
+﻿diff --git a/.github/workflows/tools.yml b/.github/workflows/tools.yml
+index 8c396e7378f..84ae2f6bd76 100644
+--- a/.github/workflows/tools.yml
++++ b/.github/workflows/tools.yml
+@@ -9,7 +9,7 @@ on:
+       id:
+         description: The ID of the job to run
+         required: true
+-        default: all
++        default: amaro
+         type: choice
+         options:
+           - all
+@@ -45,20 +45,36 @@ on:
+           - uvwasi
+           - zlib
+           - zstd
++      mode:
++        description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (upstream PR creation)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      dry_run:
++        description: 'Smoke test tool/dep update and PR metadata generation'
++        required: false
++        default: true
++        type: boolean
+ 
+ env:
+   PYTHON_VERSION: '3.14'
+ 
+ permissions:
+-  contents: read
++  contents: write
++  pull-requests: write
+ 
+ jobs:
+   tools-deps-update:
+-    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch'
++    if: github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_TOOLS_UPDATE == 'true'
+     # cannot use ubuntu-slim here because some update scripts require Docker
+-    runs-on: ubuntu-latest
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     strategy:
+       fail-fast: false  # Prevent other jobs from aborting if one fails
++      max-parallel: 4
+       matrix:
+         include:
+           - id: acorn
+@@ -335,18 +351,66 @@ jobs:
+       - run: ${{ matrix.run }}
+         if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++      - name: Check Update Status & Resolve Mode
++        id: mode-resolver
++        if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
++        env:
++          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
++          HAS_BOT_TOKEN: ${{ secrets.GH_USER_TOKEN != '' }}
++          IS_DRY_RUN: ${{ inputs.dry_run }}
++        run: |
++          if [ -n "$(git status --porcelain)" ]; then
++            echo "has_changes=true" >> "$GITHUB_OUTPUT"
++          else
++            echo "has_changes=false" >> "$GITHUB_OUTPUT"
++          fi
++
++          if [ "$INPUT_MODE" = "original" ]; then
++            RESOLVED="original"
++          elif [ "$INPUT_MODE" = "native" ] || [ "$IS_DRY_RUN" = "true" ]; then
++            RESOLVED="native"
++          elif [ "$HAS_BOT_TOKEN" = "true" ] && [ "${{ github.repository }}" = "nodejs/node" ]; then
++            RESOLVED="original"
++          else
++            RESOLVED="native"
++          fi
++          echo "mode=$RESOLVED" >> "$GITHUB_OUTPUT"
+       - name: Generate commit message if not set
+-        if: env.COMMIT_MSG == '' && (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id)
++        if: (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id) && (env.COMMIT_MSG == '' || env.COMMIT_MSG == null)
+         run: |
+-          echo "COMMIT_MSG=${{ matrix.subsystem }}: update ${{ matrix.id }} to $NEW_VERSION" >> "$GITHUB_ENV"
+-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+-        if: github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id
+-        # Creates a PR or update the Action's existing PR, or
+-        # no-op if the base branch is already up-to-date.
++          TARGET_VER="${NEW_VERSION:-latest}"
++          echo "COMMIT_MSG=${{ matrix.subsystem }}: update ${{ matrix.id }} to $TARGET_VER" >> "$GITHUB_ENV"
++      - name: Native Mode - Summary & Artifact Report
++        if: (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id) && steps.mode-resolver.outputs.mode == 'native'
++        run: |
++          mkdir -p out/tools-update
++          TARGET_VER="${NEW_VERSION:-latest (up-to-date)}"
++          HAS_CHANGES="${{ steps.mode-resolver.outputs.has_changes }}"
++          cat << EOF > "out/tools-update/${{ matrix.id }}-report.md"
++          ### Tools & Deps Update: ${{ matrix.id }}
++          - **Subsystem**: \`${{ matrix.subsystem }}\`
++          - **Labels**: \`${{ matrix.label }}\`
++          - **Detected Version**: \`$TARGET_VER\`
++          - **Working Tree Changes**: \`$HAS_CHANGES\`
++          - **Proposed Branch**: \`actions/${{ github.ref_name != 'main' && format('{0}/', github.ref_name) || '' }}tools-update-${{ matrix.id }}\`
++          - **Proposed PR Title**: \`${{ matrix.subsystem }}: update ${{ matrix.id }} to $TARGET_VER\`
++          - **Mode**: Native (GitHub-native audit & verification)
++          EOF
++          cat "out/tools-update/${{ matrix.id }}-report.md" >> "$GITHUB_STEP_SUMMARY"
++      - name: Upload Update Artifact
++        if: (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id)
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        with:
++          name: tools-update-${{ matrix.id }}-report
++          path: out/tools-update/*
++          if-no-files-found: ignore
++      - name: Original Mode - Create Pull Request
++        if: (github.event_name == 'schedule' || inputs.id == 'all' || inputs.id == matrix.id) && steps.mode-resolver.outputs.mode == 'original' && steps.mode-resolver.outputs.has_changes == 'true'
++        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+         with:
+-          token: ${{ secrets.GH_USER_TOKEN }}
+-          branch: actions/${{ github.ref_name != 'main' && format('{0}/', github.ref_name) || '' }}tools-update-${{ matrix.id }}  # Custom branch *just* for this Action.
++          token: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++          branch: actions/${{ github.ref_name != 'main' && format('{0}/', github.ref_name) || '' }}tools-update-${{ matrix.id }}
+           delete-branch: true
+           commit-message: ${{ env.COMMIT_MSG }}
+           labels: ${{ matrix.label }}
