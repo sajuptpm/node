@@ -183,6 +183,10 @@ __pycache__
 # === Rules for C++ development ===
 compile_commands.json
 
+# === Workflow Fixes ===
+workflow-fixes/*.env
+!workflow-fixes/*.env.example
+
 # === Dev Container rules ===
 # Only track the shared base devcontainer.json; ignore everything else under .devcontainer
 !.devcontainer/

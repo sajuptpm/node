@@ -1,0 +1,243 @@
+﻿diff --git a/.github/workflows/notify-on-push.yml b/.github/workflows/notify-on-push.yml
+index 25421b8447d..728a031409a 100644
+--- a/.github/workflows/notify-on-push.yml
++++ b/.github/workflows/notify-on-push.yml
+@@ -1,9 +1,35 @@
++name: Notify on Push
++
+ on:
+   push:
+     branches:
+       - main
++  workflow_dispatch:
++    inputs:
++      mode:
++        description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (Slack notify)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      simulate_force_push:
++        description: 'Simulate force-push notification event'
++        required: false
++        default: false
++        type: boolean
++      commit_sha:
++        description: 'Specific commit SHA to validate (defaults to HEAD)'
++        required: false
++        default: ''
++      fail_on_invalid:
++        description: 'Whether invalid commit message should fail the workflow step'
++        required: false
++        default: false
++        type: boolean
+ 
+-name: Notify on Push
+ permissions:
+   contents: read
+ 
+@@ -13,11 +39,29 @@ env:
+ jobs:
+   notifyOnForcePush:
+     name: Notify on Force Push on `main`
+-    if: github.repository == 'nodejs/node' && github.event.forced
+-    # cannot use ubuntu-slim here because rtCamp/action-slack-notify is dockerized
+-    runs-on: ubuntu-24.04-arm
++    if: github.event.forced || inputs.simulate_force_push == true
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - name: Slack Notification
++      - name: Resolve Notification Mode
++        id: mode-resolver
++        env:
++          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
++          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
++        run: |
++          if [ "$INPUT_MODE" = "original" ]; then
++            echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++          elif [ "$INPUT_MODE" = "native" ]; then
++            echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++          else
++            if [ -n "$SLACK_WEBHOOK" ]; then
++              echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++            else
++              echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++            fi
++          fi
++
++      - name: Original Mode - Slack Notification
++        if: steps.mode-resolver.outputs.selected_mode == 'original'
+         uses: rtCamp/action-slack-notify@33ca3be66c6f378fe1610fd1d5258632dbed5e58  # v2.4.0
+         env:
+           SLACK_COLOR: '#DE512A'
+@@ -31,25 +75,110 @@ jobs:
+           SLACK_USERNAME: nodejs-bot
+           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+ 
++      - name: Native Mode - GitHub Summary Notification
++        if: steps.mode-resolver.outputs.selected_mode == 'native'
++        run: |
++          mkdir -p reports
++          cat << 'EOF' > reports/force-push-summary.md
++          # ≡ƒÜ¿ Force Push Alert (GitHub-Native Mode)
++          A commit was force-pushed to [${{ github.repository }}@${{ github.ref_name }}](https://github.com/${{ github.repository }}/tree/${{ github.ref_name }}) by @${{ github.actor }}.
++
++          - **Repository**: `${{ github.repository }}`
++          - **Actor**: `${{ github.actor }}`
++          - **Ref**: `${{ github.ref }}`
++          - **Before**: `${{ github.event.before || '0000000000000000000000000000000000000000' }}`
++          - **After**: `${{ github.event.after || github.sha }}`
++          - **Channel**: GitHub Actions Job Summary (Native Replacement for Slack)
++          EOF
++          cat reports/force-push-summary.md >> "$GITHUB_STEP_SUMMARY"
++          echo "::warning title=Force Push Detected::${{ github.actor }} force-pushed to ${{ github.ref }}"
++
++      - name: Native Mode - Upload Force Push Audit Artifact
++        if: steps.mode-resolver.outputs.selected_mode == 'native'
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        with:
++          name: force-push-notification-report
++          path: reports/force-push-summary.md
++          if-no-files-found: ignore
++
+   validateCommitMessage:
+-    # If a commit is force-pushed out of the main branch, the `commits` array is
+-    # empty and there are no checks to run.
+-    if: github.event.commits[0]
++    if: github.event.commits[0] || github.event_name == 'workflow_dispatch'
+     name: Notify on Push on `main` with invalid message
+-    # cannot use ubuntu-slim here because rtCamp/action-slack-notify is dockerized
+-    runs-on: ubuntu-24.04-arm
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
++      - name: Checkout repository
++        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++        with:
++          persist-credentials: false
++          fetch-depth: 2
++
+       - name: Install Node.js
+         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+         with:
+           node-version: ${{ env.NODE_VERSION }}
++
++      - name: Resolve Commit Data
++        id: commit-data
++        env:
++          EVENT_COMMITS: ${{ toJSON(github.event.commits) }}
++          INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
++        run: |
++          mkdir -p reports
++          node -e '
++            const fs = require("fs");
++            let commits = [];
++            try {
++              commits = JSON.parse(process.env.EVENT_COMMITS || "[]");
++            } catch (e) {
++              commits = [];
++            }
++            if (!Array.isArray(commits) || commits.length === 0) {
++              const cp = require("child_process");
++              const sha = process.env.INPUT_COMMIT_SHA || cp.execSync("git rev-parse HEAD").toString().trim();
++              const msg = cp.execSync(`git log -1 --pretty=%B ${sha}`).toString();
++              commits = [{ id: sha, message: msg }];
++            }
++            fs.writeFileSync("reports/commits.json", JSON.stringify(commits, null, 2));
++          '
++          echo "commit_count=$(node -e 'console.log(JSON.parse(require("fs").readFileSync("reports/commits.json")).length)')" >> "$GITHUB_OUTPUT"
++
++      - name: Resolve Notification Mode
++        id: mode-resolver
++        env:
++          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
++          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
++        run: |
++          if [ "$INPUT_MODE" = "original" ]; then
++            echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++          elif [ "$INPUT_MODE" = "native" ]; then
++            echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++          else
++            if [ -n "$SLACK_WEBHOOK" ]; then
++              echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++            else
++              echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++            fi
++          fi
++
+       - name: Validate commits
+-        run: echo "$COMMITS" | npx -q core-validate-commit -
+         id: commit-check
+-        env:
+-          COMMITS: ${{ toJSON(github.event.commits) }}
+-      - name: Slack Notification
+-        if: ${{ failure() && steps.commit-check.conclusion == 'failure' && github.repository == 'nodejs/node' }}
++        run: |
++          set +e
++          cat reports/commits.json | npx -q core-validate-commit - > reports/validation-output.txt 2>&1
++          EXIT_CODE=$?
++          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
++          if [ $EXIT_CODE -ne 0 ]; then
++            echo "is_invalid=true" >> "$GITHUB_OUTPUT"
++            echo "Validation found issues (exit code $EXIT_CODE):"
++            cat reports/validation-output.txt
++          else
++            echo "is_invalid=false" >> "$GITHUB_OUTPUT"
++            echo "All commits passed validation."
++          fi
++          exit 0
++
++      - name: Original Mode - Slack Notification
++        if: steps.mode-resolver.outputs.selected_mode == 'original' && steps.commit-check.outputs.is_invalid == 'true'
+         uses: rtCamp/action-slack-notify@33ca3be66c6f378fe1610fd1d5258632dbed5e58  # v2.4.0
+         env:
+           SLACK_COLOR: '#DE512A'
+@@ -62,3 +191,46 @@ jobs:
+             After: <https://github.com/${{ github.repository }}/commit/${{ github.event.after }}|${{ github.event.after }}>
+           SLACK_USERNAME: nodejs-bot
+           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
++
++      - name: Native Mode - Summary & Warning
++        if: steps.commit-check.outputs.is_invalid == 'true'
++        run: |
++          cat << 'EOF' > reports/validation-summary.md
++          # ΓÜá∩╕Å Commit Message Validation Report
++          One or more commits pushed to `${{ github.ref_name }}` did not strictly conform to commit message guidelines.
++
++          ### Validation Output:
++          ```text
++          EOF
++          cat reports/validation-output.txt >> reports/validation-summary.md
++          cat << 'EOF' >> reports/validation-summary.md
++          ```
++
++          > [!NOTE]
++          > In **Native Mode**, this alert is recorded in the job summary and saved as an artifact.
++          EOF
++          cat reports/validation-summary.md >> "$GITHUB_STEP_SUMMARY"
++          echo "::warning title=Invalid Commit Message::Commit validation found guideline issues. See Job Summary for details."
++
++      - name: Native Mode - Clean Success Summary
++        if: steps.commit-check.outputs.is_invalid == 'false'
++        run: |
++          cat << 'EOF' > reports/validation-summary.md
++          # Γ£à Commit Message Validation Passed
++          All commits pushed to `${{ github.ref_name }}` conform to guidelines.
++          EOF
++          cat reports/validation-summary.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Upload Validation Report Artifact
++        if: always()
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        with:
++          name: commit-validation-report
++          path: reports/
++          if-no-files-found: ignore
++
++      - name: Enforce Validation Failure (Original Mode or Strict Flag)
++        if: steps.commit-check.outputs.is_invalid == 'true' && (steps.mode-resolver.outputs.selected_mode == 'original' || inputs.fail_on_invalid == true)
++        run: |
++          echo "::error::Commit validation failed and strict enforcement is active."
++          exit ${{ steps.commit-check.outputs.exit_code }}
