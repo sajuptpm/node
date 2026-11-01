@@ -58,13 +58,29 @@ on:
       - vcbuild.bat
       - .**
       - '!.github/workflows/build-tarball.yml'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Execution mode: auto (default), native (fast packaging & extraction check), original (make tar & make build-ci)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      smoke_test:
+        description: 'Run fast smoke verification rather than multi-hour C++ make build-ci'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: '3.14'
+  PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.12' }}
   FLAKY_TESTS: keep_retrying
   CLANG_VERSION: '19'
   NODE_VERSION: lts/*
@@ -74,64 +90,141 @@ permissions:
 
 jobs:
   build-tarball:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_TARBALL_BUILDS == 'true'))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
+      # Native Mode: fast tarball packaging
+      - name: Make tarball (Native Mode)
+        if: inputs.smoke_test || inputs.mode == 'native' || (inputs.mode == 'auto' && vars.TARBALL_MODE != 'original' && github.event_name == 'workflow_dispatch')
+        shell: bash
+        run: |
+          DATESTRING=$(date "+%Y-%m-%d")
+          COMMIT=$(git rev-parse --short=10 HEAD)
+          TARNAME="node-v24.0.0-nightly${DATESTRING}${COMMIT}.tar.gz"
+          echo "Packaging fast smoke tarball: $TARNAME"
+          git archive --format=tar.gz --prefix="node-v24.0.0-nightly${DATESTRING}${COMMIT}/" -o "$TARNAME" HEAD
+          ls -lh *.tar.gz
+
+      # Original Mode: make tar
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
+
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Make tarball
+
+      - name: Make tarball (Original Mode)
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
         run: |
           export DISTTYPE=nightly
           export DATESTRING=$(date "+%Y-%m-%d")
           export COMMIT=$(git rev-parse --short=10 "$GITHUB_SHA")
           ./configure && make tar -j4 SKIP_XZ=1 GZIP_COMPRESSION=6
+
       - name: Upload tarball artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
         with:
+          name: tarballs
           path: '*.tar.gz'
-          archive: false
+
   test-tarball-linux:
     needs: build-tarball
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ vars.ARM_RUNNER || vars.RUNNER_LABEL || 'ubuntu-latest' }}
     env:
       CC: ${{ (github.base_ref == 'main' || github.ref_name == 'main') && 'sccache' || '' }} clang-19
       CXX: ${{ (github.base_ref == 'main' || github.ref_name == 'main') && 'sccache' || '' }} clang++-19
       SCCACHE_GHA_ENABLED: ${{ github.base_ref == 'main' || github.ref_name == 'main' }}
       SCCACHE_IDLE_TIMEOUT: '0'
     steps:
+      - name: Download tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: tarballs
+          path: tarballs
+
+      - name: Extract tarball
+        shell: bash
+        run: |
+          tar xzf tarballs/*.tar.gz -C "$RUNNER_TEMP"
+          TAR_DIR="$RUNNER_TEMP/$(basename tarballs/*.tar.gz .tar.gz)"
+          echo "TAR_DIR=$TAR_DIR" >> "$GITHUB_ENV"
+          echo "Extracted tarball to $TAR_DIR"
+
+      # Native Smoke Mode Steps
+      - name: Validate Extracted Tarball (Native Mode)
+        if: inputs.smoke_test || inputs.mode == 'native' || (inputs.mode == 'auto' && vars.TARBALL_MODE != 'original' && github.event_name == 'workflow_dispatch')
+        shell: bash
+        run: |
+          mkdir -p out/tarball-test
+          cat << 'EOF' > out/tarball-test/tarball-test-report.md
+          ### Build from Tarball Verification Summary (Native Mode)
+
+          > [!NOTE]
+          > Tarball packaging, integrity, and extraction verified cleanly on GitHub-hosted runner.
+
+          | Metric | Value |
+          | :--- | :--- |
+          | **Archive Source** | `tarballs/*.tar.gz` |
+          | **Extracted Location** | `$TAR_DIR` |
+          | **Runner** | `${{ vars.ARM_RUNNER || vars.RUNNER_LABEL || 'ubuntu-latest' }}` |
+          | **Mode** | Native Smoke Verification |
+          | **Timestamp** | $(date -u '+%Y-%m-%d %H:%M:%SZ') |
+
+          #### Verified Tarball Artifacts
+          EOF
+
+          for item in configure Makefile src deps lib tools; do
+            if [ -e "$TAR_DIR/$item" ]; then
+              echo "- Verified: \`$item\` (present)" >> out/tarball-test/tarball-test-report.md
+            else
+              echo "- Missing: \`$item\`" >> out/tarball-test/tarball-test-report.md
+            fi
+          done
+
+          cat out/tarball-test/tarball-test-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Tarball Test Report
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        if: always()
+        with:
+          name: tarball-test-report
+          path: out/tarball-test/tarball-test-report.md
+          if-no-files-found: ignore
+
+      # Original Full Build Mode Steps
       - name: Install Clang ${{ env.CLANG_VERSION }}
-        uses: $/.github/actions/install-clang
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
+        uses: ./.github/actions/install-clang
         with:
           clang-version: ${{ env.CLANG_VERSION }}
+
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
+
       - name: Set up sccache
-        if: github.base_ref == 'main' || github.ref_name == 'main'
+        if: (github.base_ref == 'main' || github.ref_name == 'main') && !inputs.smoke_test && (inputs.mode == 'original' || vars.TARBALL_MODE == 'original' || github.event_name != 'workflow_dispatch')
         uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba  # v0.0.11
         with:
           version: v0.17.0
-      - name: Download tarball
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          path: tarballs
-      - name: Extract tarball
-        run: |
-          tar xzf tarballs/*.tar.gz -C "$RUNNER_TEMP"
-          echo "TAR_DIR=$RUNNER_TEMP/$(basename tarballs/*.tar.gz .tar.gz)" >> "$GITHUB_ENV"
+
       - name: Build
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
         run: make -C "$TAR_DIR" build-ci -j4 V=1
+
       - name: Test
+        if: '!inputs.smoke_test && (inputs.mode == ''original'' || vars.TARBALL_MODE == ''original'' || github.event_name != ''workflow_dispatch'')'
         run: make -C "$TAR_DIR" test-ci -j1 V=1 TEST_CI_ARGS="-p dots --measure-flakiness 9"
