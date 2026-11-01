@@ -61,6 +61,7 @@ jobs:
       # The event association may not expose private organization membership,
       # so gate the guidance job on the privileged API result.
       should_scan: ${{ steps.resolve.outputs.should_scan }}
+      association: ${{ steps.resolve.outputs.association }}
       pr_number: ${{ steps.resolve.outputs.pr_number }}
       dry_run: ${{ steps.resolve.outputs.dry_run }}
       mode: ${{ steps.resolve.outputs.mode }}
@@ -105,13 +106,15 @@ jobs:
           echo "API author association query result: $api_association"
           echo "Event author association: $EVENT_ASSOCIATION"
 
-          if [ -z "$api_association" ]; then
-            if [ "${{ inputs.is_first_time }}" = "false" ]; then
-              api_association="CONTRIBUTOR"
-            else
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.is_first_time }}" = "true" ]; then
               api_association="FIRST_TIME_CONTRIBUTOR"
+              echo "Workflow dispatch override: treating author association as FIRST_TIME_CONTRIBUTOR"
+            elif [ -z "$api_association" ]; then
+              api_association="CONTRIBUTOR"
             fi
-            echo "Falling back to resolved association: $api_association"
+          elif [ -z "$api_association" ]; then
+            api_association="FIRST_TIME_CONTRIBUTOR"
           fi
 
           case "$api_association" in
@@ -138,6 +141,7 @@ jobs:
               ;;
           esac
 
+          echo "association=$api_association" >> "$GITHUB_OUTPUT"
           echo "pr_number=$NUMBER" >> "$GITHUB_OUTPUT"
           echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
           echo "mode=$RESOLVED_MODE" >> "$GITHUB_OUTPUT"
@@ -166,8 +170,8 @@ jobs:
           auto-close: false
           honeypot: false
 
-      - name: Comment with contributor guidance
-        if: needs.contributor.outputs.is_first_time == 'true' || needs.contributor.outputs.simulate_caution == 'true' || steps.agentscan.outputs.classification == 'mixed' || steps.agentscan.outputs.classification == 'automation' || steps.agentscan.outputs['community-flagged'] == 'true'
+      - name: Render Guidance & Generate Evaluation Report
+        id: render_guidance
         env:
           ADD_CAUTION: >-
             ${{
@@ -176,8 +180,8 @@ jobs:
               steps.agentscan.outputs['community-flagged'] == 'true' ||
               needs.contributor.outputs.simulate_caution == 'true'
             }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IS_FIRST_TIME: ${{ needs.contributor.outputs.is_first_time }}
+          ASSOCIATION: ${{ needs.contributor.outputs.association }}
           NUMBER: ${{ needs.contributor.outputs.pr_number }}
           DRY_RUN: ${{ needs.contributor.outputs.dry_run }}
           MODE: ${{ needs.contributor.outputs.mode }}
@@ -213,15 +217,21 @@ jobs:
             [automation policy](https://github.com/nodejs/node/blob/HEAD/CONTRIBUTING.md#automation-and-bots)
             for additional context.
         run: |
+          mkdir -p reports
+          should_comment="false"
           if [[ "$IS_FIRST_TIME" == "true" && "$ADD_CAUTION" == "true" ]]; then
             body="$WELCOME_MESSAGE"$'\n\n'"$CAUTION_MESSAGE"
+            should_comment="true"
           elif [[ "$IS_FIRST_TIME" == "true" ]]; then
             body="$WELCOME_MESSAGE"
-          else
+            should_comment="true"
+          elif [[ "$ADD_CAUTION" == "true" ]]; then
             body="$CAUTION_MESSAGE"
+            should_comment="true"
+          else
+            body="No guidance comment required for author association: $ASSOCIATION"
           fi
 
-          mkdir -p reports
           cat << 'EOF' > generate_report.py
           import os
 
@@ -231,6 +241,8 @@ jobs:
           is_first = os.environ.get("IS_FIRST_TIME", "false")
           add_caution = os.environ.get("ADD_CAUTION", "false").strip()
           user_login = os.environ.get("USER_LOGIN", "")
+          assoc = os.environ.get("ASSOCIATION", "")
+          should_comment = os.environ.get("SHOULD_COMMENT", "false")
           body = os.environ.get("GUIDANCE_BODY", "")
 
           report = []
@@ -239,20 +251,25 @@ jobs:
           report.append("| :--- | :--- |")
           report.append(f"| **Target PR** | `#{pr_num}` |")
           report.append(f"| **Contributor Login** | `{user_login}` |")
+          report.append(f"| **Author Association** | `{assoc}` |")
           report.append(f"| **Execution Mode** | `{mode}` |")
           report.append(f"| **Dry Run** | `{dry_run}` |")
           report.append(f"| **First Time Contributor** | `{is_first}` |")
-          report.append(f"| **AgentScan Automation Caution** | `{add_caution}` |\n")
+          report.append(f"| **AgentScan Automation Caution** | `{add_caution}` |")
+          report.append(f"| **Guidance Comment Action** | `{'Rendered' if should_comment == 'true' else 'Not Needed'}` |\n")
 
-          report.append("## Guidance Message Preview\n")
+          report.append("## Guidance Content Preview\n")
           report.append("```markdown")
           report.append(body)
           report.append("```\n")
 
-          if dry_run == "true" or mode == "native":
-              report.append("ℹ️ **Simulation Mode**: The above guidance comment was rendered and verified without posting to remote PR.")
+          if should_comment == "true":
+              if dry_run == "true" or mode == "native":
+                  report.append("ℹ️ **Simulation Mode**: The guidance comment was rendered and verified without modifying the pull request.")
+              else:
+                  report.append(f"✅ **Posted Live**: Comment delivered to PR `#{pr_num}`.")
           else:
-              report.append(f"✅ **Posted Live**: Comment delivered to PR `#{pr_num}`.")
+              report.append(f"ℹ️ Author association `{assoc}` did not require onboarding guidance or automation caution.")
 
           content = "\n".join(report) + "\n"
           with open("reports/contributor-guidance-report.md", "w", encoding="utf-8") as f:
@@ -264,15 +281,22 @@ jobs:
                   f.write(content)
           EOF
 
+          export SHOULD_COMMENT="$should_comment"
           export GUIDANCE_BODY="$body"
           python3 generate_report.py
+          echo "should_comment=$should_comment" >> "$GITHUB_OUTPUT"
+          echo "body<<EOF" >> "$GITHUB_ENV"
+          echo "$body" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
 
-          if [[ "$DRY_RUN" == "true" || "$MODE" == "native" ]]; then
-            echo "Dry run mode active: Skipping remote comment on PR #$NUMBER"
-          else
-            printf '%s\n' "$body" |
-              gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
-          fi
+      - name: Post Comment to PR (Original Live Mode)
+        if: steps.render_guidance.outputs.should_comment == 'true' && needs.contributor.outputs.dry_run != 'true' && needs.contributor.outputs.mode == 'original'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ needs.contributor.outputs.pr_number }}
+        run: |
+          printf '%s\n' "$body" |
+            gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body-file -
 
       - name: Upload Contributor Guidance Report
         if: always()
