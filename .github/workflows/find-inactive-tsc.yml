@@ -80,12 +80,15 @@ jobs:
 
       - name: Find inactive TSC voting members
         run: |
-          node tools/find-inactive-tsc.mjs --verbose >> $GITHUB_ENV
+          node tools/find-inactive-tsc.mjs --verbose > tsc-output.txt
+          cat tsc-output.txt
+          grep -E '^[A-Z_]+=' tsc-output.txt >> $GITHUB_ENV || true
 
       - name: Generate Summary Report
         if: always()
         run: |
           mkdir -p audit-reports
+          cp tsc-output.txt audit-reports/tsc-voting-records.txt 2>/dev/null || true
           git diff README.md > audit-reports/readme-tsc.diff || true
           python3 -c '
           import os, subprocess
