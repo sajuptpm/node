@@ -83,7 +83,33 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41356848087`](https://github.com/sajuptpm/node/actions/runs/41356848087)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41356848087](https://github.com/sajuptpm/node/actions/runs/41356848087)
+- **Trigger Type**: `workflow_dispatch` (`pr_numbers: "1"`, `mode: native`, `dry_run: true`)
+- **Outcome**: `success` (All jobs completed cleanly)
+- **Total Duration**: ~8 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **get-prs-for-ci** (Job `124998638395`) | **3s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Get Pull Requests | <1s | `success` | Parsed manual/discovered PR list (`numbers=1`) |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **start-ci** (Job `124998858979`) | **5s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Execution Mode | <1s | `success` | Mode resolved to `native` (`dry_run=true`) |
+| ├── Install Node.js | — | `skipped` | Skipped in native mode (unneeded) |
+| ├── Install @node-core/utils | — | `skipped` | Skipped in native mode (unneeded) |
+| ├── Setup @node-core/utils | — | `skipped` | Skipped in native mode (unneeded) |
+| ├── Start or resume CI (Original) | — | `skipped` | Skipped in native mode (unneeded) |
+| ├── Audit & Process PR CI (Native) | 1s | `success` | Evaluated PR #1, wrote summary table |
+| ├── Upload Auto Start CI Report | 1s | `success` | Uploaded `auto-start-ci-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`auto-start-ci-report`** (Zip, ~2 KB): Contains `auto-start-ci-report.md` capturing evaluated PR numbers, mergeability, active CI labels, simulated actions, and audit timestamp.
 
 ---
 
