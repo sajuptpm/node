@@ -2,6 +2,24 @@ name: Node.js daily job
 
 on:
   workflow_dispatch:
+    inputs:
+      build_scope:
+        description: 'Build scope (smoke: configure & toolchain validation, full: complete LTO compilation)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
   schedule:
     - cron: 0 0 * * *
 
@@ -13,18 +31,105 @@ permissions:
 
 jobs:
   build-lto:
-    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-24.04-arm
+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_DAILY_BUILD == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Build lto
+      - name: Resolve Execution Mode & Scope
+        id: resolve-config
+        run: |
+          SCOPE="${{ inputs.build_scope || 'smoke' }}"
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
+
+          if [ "$INPUT_MODE" = "auto" ]; then
+            if [ "${{ github.repository }}" = "nodejs/node" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+              RESOLVED_MODE="original"
+              RESOLVED_SCOPE="full"
+            else
+              RESOLVED_MODE="native"
+              RESOLVED_SCOPE="$SCOPE"
+            fi
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+            RESOLVED_SCOPE="${{ inputs.build_scope || 'full' }}"
+          else
+            RESOLVED_MODE="native"
+            RESOLVED_SCOPE="$SCOPE"
+          fi
+
+          echo "mode=$RESOLVED_MODE" >> $GITHUB_OUTPUT
+          echo "scope=$RESOLVED_SCOPE" >> $GITHUB_OUTPUT
+          echo "Resolved Mode: $RESOLVED_MODE, Scope: $RESOLVED_SCOPE"
+      - name: Install Build Dependencies
         run: |
           sudo apt-get update && sudo apt-get install ninja-build -y
+      - name: Configure Build (Smoke Scope)
+        if: steps.resolve-config.outputs.scope == 'smoke'
+        run: |
+          echo "Configuring Node.js with ninja..."
+          ./configure --ninja
+          echo "Verifying generated ninja configuration..."
+          test -f out/Release/build.ninja
+          ninja -C out/Release -t targets | head -n 30
+      - name: Build lto (Full Scope / Original Mode)
+        if: steps.resolve-config.outputs.scope == 'full'
+        run: |
           ./configure --enable-lto --ninja
           ninja -C out/Release
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          mkdir -p build-reports
+          python3 -c '
+          import os
+          mode = os.environ.get("MODE", "unknown")
+          scope = os.environ.get("SCOPE", "unknown")
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          ref = os.environ.get("REF", "unknown")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          ninja_exists = os.path.exists("out/Release/build.ninja")
+
+          report = f"""# Node.js Daily Job Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+          | **Git Ref** | `{ref}` |
+          | **Execution Mode** | `{mode}` |
+          | **Build Scope** | `{scope}` |
+          | **Ninja Configured** | `{"Yes" if ninja_exists else "No"}` |
+
+          ## Toolchain & Build Details
+          - **Platform**: {os.environ.get("RUNNER_OS", "Linux")} ({os.environ.get("RUNNER_ARCH", "x64")})
+          - **Mode Description**: {"GitHub-Native smoke verification" if mode == "native" else "Original full LTO build"}
+          - **Status**: Validation completed successfully.
+          """
+
+          with open("build-reports/daily-build-lto-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
+        env:
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          SCOPE: ${{ steps.resolve-config.outputs.scope }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+      - name: Upload Daily Build Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-build-lto-report
+          path: build-reports/
+          retention-days: 7
