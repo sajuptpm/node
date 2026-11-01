@@ -167,7 +167,7 @@ jobs:
           honeypot: false
 
       - name: Comment with contributor guidance
-        if: env.IS_FIRST_TIME == 'true' || env.ADD_CAUTION == 'true'
+        if: needs.contributor.outputs.is_first_time == 'true' || needs.contributor.outputs.simulate_caution == 'true' || steps.agentscan.outputs.classification == 'mixed' || steps.agentscan.outputs.classification == 'automation' || steps.agentscan.outputs['community-flagged'] == 'true'
         env:
           ADD_CAUTION: >-
             ${{
