@@ -85,7 +85,30 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41360352996`](https://github.com/sajuptpm/node/actions/runs/41360352996)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41360352996](https://github.com/sajuptpm/node/actions/runs/41360352996)
+- **Trigger Type**: `workflow_dispatch` (`pr_number: "1"`, `is_first_time: true`, `dry_run: true`, `mode: native`)
+- **Outcome**: `success` (All jobs and steps executed cleanly)
+- **Total Duration**: ~6 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Resolve contributor status** (Job `125009209192`) | **2s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | <1s | `success` | Runner initialization |
+| ├── Check author association | 1s | `success` | Resolved association to `FIRST_TIME_CONTRIBUTOR` |
+| └── Complete job | <1s | `success` | Passed outputs (`should_scan=true`) to guidance |
+| **Apply contributor guidance** (Job `125009230854`) | **4s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Scan contributor activity | — | `skipped` | Skipped during dispatch test (PR event only) |
+| ├── Render Guidance & Generate Report | <1s | `success` | Rendered welcome message & updated summary |
+| ├── Post Comment to PR (Original Live) | — | `skipped` | Safely bypassed in dry-run/native mode |
+| ├── Upload Contributor Guidance Report | 1s | `success` | Uploaded `contributor-guidance-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`contributor-guidance-report`** (Zip, ~1.5 KB): Contains `contributor-guidance-report.md` with complete contributor metadata, author association evaluation, and rendered welcome message preview.
 
 ---
 
