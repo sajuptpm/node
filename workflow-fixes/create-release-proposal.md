@@ -85,7 +85,29 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Manual Dispatch Verification
+- **Run ID**: [`41352715646`](https://github.com/sajuptpm/node/actions/runs/41352715646)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41352715646](https://github.com/sajuptpm/node/actions/runs/41352715646)
+- **Trigger**: `workflow_dispatch` (Inputs: `release-line=22`, `release-date=2026-11-02`, `mode=native`, `dry_run=true`)
+- **Commit Tested**: `06cfdafc276`
+- **Overall Result**: Success (`✓`)
+- **Zero Skipped Jobs**: The Prepare Release Proposal job ran and completed cleanly in 1 minute 51 seconds.
+
+### Execution Timeline & Step Analysis
+| Step Name | Status | Duration | Runner Image | Step Verification Details |
+|---|---|---|---|---|
+| `Checkout staging branch` | `success` | 14s | `ubuntu-latest` | Staging branch `v22.x-staging` checked out with `persist-credentials: false` and `fetch-depth: 100` |
+| `Install Node.js` | `success` | 1s | `ubuntu-latest` | Runtime provisioned using `actions/setup-node@v4` |
+| `Install @node-core/utils` | `success` | 4s | `ubuntu-latest` | Installed global `@node-core/utils` release tooling |
+| `Configure @node-core/utils` | `success` | 1s | `ubuntu-latest` | Token resolved via `GITHUB_TOKEN` fallback, configured target release branch `v22.x` and upstream |
+| `Setup git author` | `success` | 0s | `ubuntu-latest` | Git author identity configured locally |
+| `Start git node release prepare` | `success` | 1m26s | `ubuntu-latest` | Executed `git node release --prepare`; generated version `22.23.4`; generated proposal commit; evaluated `dry_run=true` and wrote summary to `$GITHUB_STEP_SUMMARY` |
+| `Upload Release Proposal Artifacts` | `success` | 1s | `ubuntu-latest` | Uploaded `release-proposal-report` containing full dry-run proposal report |
+
+### Generated Artifacts
+| Artifact Name | Size | Files Included | Purpose |
+|---|---|---|---|
+| `release-proposal-report` | ~1.2 KB | `reports/release-proposal-summary.md` | Verification record detailing release line, date, title, proposal branch, and base commit |
 
 ---
 
