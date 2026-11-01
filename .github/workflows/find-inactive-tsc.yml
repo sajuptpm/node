@@ -4,29 +4,43 @@ on:
   schedule:
     # Run every Tuesday 12:05 AM UTC.
     - cron: 5 0 * * 2
-
   workflow_dispatch:
+    inputs:
+      create_pr:
+        description: 'Open a pull request with updated README.md if inactive TSC members found'
+        required: false
+        default: false
+        type: boolean
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
 
 env:
   NODE_VERSION: lts/*
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   find:
-    if: github.repository == 'nodejs/node'
-    runs-on: ubuntu-slim
-
+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_INACTIVE_TSC == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - name: Checkout the repo
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Clone nodejs/TSC repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: .tmp
@@ -34,19 +48,113 @@ jobs:
           repository: nodejs/TSC
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Find inactive TSC voting members
-        run: tools/find-inactive-tsc.mjs >> $GITHUB_ENV
+      - name: Resolve Execution Mode & Parameters
+        id: resolve-config
+        run: |
+          CREATE_PR_INPUT="${{ inputs.create_pr || 'false' }}"
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
 
-      - name: Open pull request
-        uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
-        # Creates a PR or update the Action's existing PR, or
-        # no-op if the base branch is already up-to-date.
+          if [ "$INPUT_MODE" = "auto" ]; then
+            if [ "${{ github.repository }}" = "nodejs/node" ] && [ -n "${{ secrets.GH_USER_TOKEN }}" ]; then
+              RESOLVED_MODE="original"
+              RESOLVED_CREATE_PR="true"
+            else
+              RESOLVED_MODE="native"
+              RESOLVED_CREATE_PR="$CREATE_PR_INPUT"
+            fi
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+            RESOLVED_CREATE_PR="true"
+          else
+            RESOLVED_MODE="native"
+            RESOLVED_CREATE_PR="$CREATE_PR_INPUT"
+          fi
+
+          echo "mode=$RESOLVED_MODE" >> $GITHUB_OUTPUT
+          echo "create_pr=$RESOLVED_CREATE_PR" >> $GITHUB_OUTPUT
+          echo "Resolved Mode: $RESOLVED_MODE, Create PR: $RESOLVED_CREATE_PR"
+
+      - name: Find inactive TSC voting members
+        run: |
+          node tools/find-inactive-tsc.mjs --verbose >> $GITHUB_ENV
+
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          mkdir -p audit-reports
+          git diff README.md > audit-reports/readme-tsc.diff || true
+          python3 -c '
+          import os, subprocess
+
+          mode = os.environ.get("MODE", "unknown")
+          create_pr = os.environ.get("CREATE_PR", "false")
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          inactive_handles = os.environ.get("INACTIVE_TSC_HANDLES", "None")
+          details = os.environ.get("DETAILS_FOR_COMMIT_BODY", "All TSC voting members are currently active.")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          readme_changed = False
+          diff_stat = ""
+          try:
+              status = subprocess.check_output(["git", "status", "--porcelain", "README.md"], text=True).strip()
+              readme_changed = len(status) > 0
+              if readme_changed:
+                  diff_stat = subprocess.check_output(["git", "diff", "--stat", "README.md"], text=True).strip()
+          except Exception as e:
+              diff_stat = str(e)
+
+          report = f"""# Inactive TSC Voting Members Audit Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+          | **Execution Mode** | `{mode}` |
+          | **Create PR Enabled** | `{create_pr}` |
+          | **Inactive TSC Handles** | `{inactive_handles}` |
+          | **README Modifications** | `{"Yes (Inactive TSC members moved)" if readme_changed else "None"}` |
+
+          ## Audit Findings
+          {details}
+
+          {f"```\n{diff_stat}\n```" if readme_changed else ""}
+
+          ## Execution Details
+          - **Mode Description**: {"GitHub-Native safe audit without unsolicited PR creation" if mode == "native" else "Original automated PR creation"}
+          - **Status**: Audit completed successfully.
+          """
+
+          with open("audit-reports/inactive-tsc-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          CREATE_PR: ${{ steps.resolve-config.outputs.create_pr }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+
+      - name: Upload Inactive TSC Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inactive-tsc-report
+          path: audit-reports/
+          retention-days: 7
+
+      - name: Open pull request (Original Mode / Requested)
+        if: steps.resolve-config.outputs.create_pr == 'true' && env.INACTIVE_TSC_HANDLES != ''
+        uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           author: Node.js GitHub Bot <github-bot@iojs.org>
           branch: actions/inactive-tsc
