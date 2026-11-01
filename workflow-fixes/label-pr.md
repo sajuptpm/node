@@ -87,7 +87,26 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Manual Dispatch Verification
+- **Run ID**: [`41351490774`](https://github.com/sajuptpm/node/actions/runs/41351490774)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41351490774](https://github.com/sajuptpm/node/actions/runs/41351490774)
+- **Trigger**: `workflow_dispatch` (Inputs: `mode=native`, `pr_number=1`, `dry_run=false`)
+- **Commit Tested**: `fc93d4b6d17`
+- **Overall Result**: Success (`✓`)
+- **Zero Skipped Jobs**: The labeling job ran and succeeded in 17 seconds.
+
+### Execution Timeline & Step Analysis
+| Step Name | Status | Duration | Runner Image | Step Verification Details |
+|---|---|---|---|---|
+| `Checkout repository` | `success` | 10s | `ubuntu-latest` | Repository checked out with `persist-credentials: false` |
+| `Resolve Execution Mode & Token` | `success` | 0s | `ubuntu-latest` | Successfully evaluated `GH_USER_TOKEN` absence, resolved mode to `native` and token to `GITHUB_TOKEN` |
+| `Native Mode - Workflow Dispatch PR Labeling & Evaluation` | `success` | 2s | `ubuntu-latest` | Analyzed PR #1 files (`configure.py`), matched 2 rules from `label-pr-config.yml`, published report to `$GITHUB_STEP_SUMMARY`, emitted Actions notice |
+| `Upload Label Report Artifact` | `success` | 1s | `ubuntu-latest` | Uploaded `pr-labeler-report` containing full JSON evaluation audit and markdown summary |
+
+### Generated Artifacts
+| Artifact Name | Size | Files Included | Purpose |
+|---|---|---|---|
+| `pr-labeler-report` | ~1.8 KB | `reports/label-evaluation.json`, `reports/label-summary.md` | Full record of PR touched files, evaluated regex patterns, matched labels, and timestamp |
 
 ---
 
