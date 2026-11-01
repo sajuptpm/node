@@ -80,7 +80,35 @@ No proprietary secrets required.
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41357831892`](https://github.com/sajuptpm/node/actions/runs/41357831892)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41357831892](https://github.com/sajuptpm/node/actions/runs/41357831892)
+- **Trigger Type**: `workflow_dispatch` (`smoke_test: true`, `mode: native`)
+- **Outcome**: `success` (All pipeline jobs and steps completed cleanly)
+- **Total Duration**: ~54 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **build-tarball** (Job `125001614928`) | **38s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Run actions/checkout@v4 | 10s | `success` | Cloned repository ref |
+| ├── Make tarball (Native Mode) | 20s | `success` | Packaged release `.tar.gz` archive via `git archive` |
+| ├── Make tarball (Original Mode) | — | `skipped` | Skipped in native mode |
+| ├── Upload tarball artifact | 5s | `success` | Uploaded `tarballs` archive via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **test-tarball-linux** (Job `125001925711`) | **16s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Download tarball | 6s | `success` | Downloaded `tarballs` archive via v4 |
+| ├── Extract tarball | 4s | `success` | Extracted archive to `$RUNNER_TEMP` |
+| ├── Validate Extracted Tarball (Native) | <1s | `success` | Verified existence of configure, Makefile, src, deps, lib, tools |
+| ├── Upload Tarball Test Report | 1s | `success` | Uploaded `tarball-test-report` artifact via v4 |
+| ├── Original C++ Compilation steps | — | `skipped` | Skipped in native mode |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`tarballs`** (Zip, ~45 MB): Full source archive `.tar.gz` matching nightly release packaging.
+- **`tarball-test-report`** (Zip, ~1.5 KB): Contains `tarball-test-report.md` capturing archive source, extracted location, verified files, and timestamp.
 
 ---
 
