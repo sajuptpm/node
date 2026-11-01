@@ -72,7 +72,33 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41364219075`](https://github.com/sajuptpm/node/actions/runs/41364219075)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41364219075](https://github.com/sajuptpm/node/actions/runs/41364219075)
+- **Workflow**: License update (`.github/workflows/license-builder.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `create_pr: false`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 16s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `update_license` | Set up job | Completed | 3s |
+| `update_license` | Run actions/checkout@v4 | Completed | 6s |
+| `update_license` | Resolve Configuration & Inputs | Completed | 1s |
+| `update_license` | Build License | Completed | 2s |
+| `update_license` | Generate Summary Report | Completed | 1s |
+| `update_license` | Upload License Builder Report | Completed | 2s |
+| `update_license` | Open pull request (Original Mode / Requested) | Skipped | 0s |
+| `update_license` | Post Run actions/checkout@v4 | Completed | 1s |
+| `update_license` | Complete job | Completed | 0s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `license-builder-report` | ~1.2 KB | License builder execution summary report and `license.diff` audit log |
 
 ---
 
