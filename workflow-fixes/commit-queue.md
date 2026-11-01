@@ -88,7 +88,36 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41359744999`](https://github.com/sajuptpm/node/actions/runs/41359744999)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41359744999](https://github.com/sajuptpm/node/actions/runs/41359744999)
+- **Trigger Type**: `workflow_dispatch` (`dry_run: true`, `mode: native`, `candidates: ""`)
+- **Outcome**: `success` (All jobs completed cleanly)
+- **Total Duration**: ~23 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **get_candidate_prs** (Job `125007393238`) | **4s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | <1s | `success` | Runner initialization |
+| ├── Resolve Execution Mode | <1s | `success` | Resolved mode to `native` (`dry_run=true`) |
+| ├── Get Pull Request Candidates | 1s | `success` | Evaluated queue; set candidate to `audit` |
+| └── Complete job | <1s | `success` | Handed off outputs to `commitQueue` |
+| **commitQueue** (Job `125007415343`) | **19s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Checkout repository | 6s | `success` | Cloned repository with `github.token` fallback |
+| ├── Install Node.js | 4s | `success` | Configured Node.js LTS runtime |
+| ├── Install @node-core/utils | 3s | `success` | Installed global `@node-core/utils` npm package |
+| ├── Configure @node-core/utils | 1s | `success` | Executed `ncu-config` with fallback credentials |
+| ├── Filter Pull Requests | <1s | `success` | Processed candidate audit marker cleanly |
+| ├── Label PRs Lacking Approval | — | `skipped` | Skipped (no PRs lacking second approval) |
+| ├── Start Commit Queue (Original) | — | `skipped` | Skipped in native/dry-run mode |
+| ├── Generate Audit Report (Native) | <1s | `success` | Generated report & updated `$GITHUB_STEP_SUMMARY` |
+| ├── Upload Commit Queue Report | 1s | `success` | Uploaded `commit-queue-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`commit-queue-report`** (Zip, ~1.5 KB): Contains `commit-queue-report.md` capturing environment configuration, toolchain readiness, target branch, and zero-PR queue idle status.
 
 ---
 
