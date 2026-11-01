@@ -65,7 +65,36 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41362364817`](https://github.com/sajuptpm/node/actions/runs/41362364817)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41362364817](https://github.com/sajuptpm/node/actions/runs/41362364817)
+- **Workflow**: Node.js daily job (`.github/workflows/daily.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `build_scope: smoke`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 28s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `build-lto` | Set up job | Completed | 3s |
+| `build-lto` | Run actions/checkout@v4 | Completed | 7s |
+| `build-lto` | Use Node.js lts/* | Completed | 2s |
+| `build-lto` | Resolve Execution Mode & Scope | Completed | 1s |
+| `build-lto` | Install Build Dependencies | Completed | 6s |
+| `build-lto` | Configure Build (Smoke Scope) | Completed | 4s |
+| `build-lto` | Build lto (Full Scope / Original Mode) | Skipped | 0s |
+| `build-lto` | Generate Summary Report | Completed | 1s |
+| `build-lto` | Upload Daily Build Report | Completed | 2s |
+| `build-lto` | Post Use Node.js lts/* | Completed | 1s |
+| `build-lto` | Post Run actions/checkout@v4 | Completed | 1s |
+| `build-lto` | Complete job | Completed | 1s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `daily-build-lto-report` | ~1.2 KB | Daily build summary report with configuration metrics and verification status |
 
 ---
 
