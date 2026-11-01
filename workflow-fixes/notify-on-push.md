@@ -93,7 +93,31 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Automated Push Run Verification
+- **Run ID**: [`41351111043`](https://github.com/sajuptpm/node/actions/runs/41351111043)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41351111043](https://github.com/sajuptpm/node/actions/runs/41351111043)
+- **Trigger**: `push` (`main` branch)
+- **Commit**: `77cc5a0240d`
+- **Overall Result**: Success (`✓`)
+
+### Manual Dispatch Verification (Full Dual-Mode Suite)
+- **Run ID**: [`41351185550`](https://github.com/sajuptpm/node/actions/runs/41351185550)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41351185550](https://github.com/sajuptpm/node/actions/runs/41351185550)
+- **Trigger**: `workflow_dispatch` (Inputs: `mode=native`, `simulate_force_push=true`)
+- **Overall Result**: Success (`✓`)
+- **Zero Skipped Jobs**: Both jobs executed and passed cleanly.
+
+### Execution Timeline & Step Analysis
+| Job Name | Status | Duration | Runner Image | Key Step Verification |
+|---|---|---|---|---|
+| `Notify on Force Push on main` | `success` | 7s | `ubuntu-latest` | Mode resolved to `native`; simulated force-push warning written to `$GITHUB_STEP_SUMMARY`; audit report generated |
+| `Notify on Push on main with invalid message` | `success` | 37s | `ubuntu-latest` | Git commits dynamically resolved from HEAD; `core-validate-commit` run non-destructively; markdown summary published; audit report generated |
+
+### Generated Artifacts
+| Artifact Name | Size | Files Included | Purpose |
+|---|---|---|---|
+| `force-push-notification-report` | ~1.4 KB | `reports/force-push-summary.md` | Audit log containing repository, actor, ref, before/after SHA, and notification timestamp |
+| `commit-validation-report` | ~4.2 KB | `reports/commits.json`, `reports/validation-output.txt`, `reports/validation-summary.md` | Full commit payload, raw `core-validate-commit` linter stdout/stderr, and GitHub step summary markdown |
 
 ---
 
