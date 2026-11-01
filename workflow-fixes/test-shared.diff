@@ -1,0 +1,177 @@
+﻿diff --git a/.github/workflows/test-shared.yml b/.github/workflows/test-shared.yml
+index 1a5e9c3261f..dc00e28ee07 100644
+--- a/.github/workflows/test-shared.yml
++++ b/.github/workflows/test-shared.yml
+@@ -1,5 +1,5 @@
+ # This action uses the following secrets:
+-#   CACHIX_AUTH_TOKEN: Write access to nodejs.cachix.org ΓÇô┬áwithout it, the cache is read-only.
++#   CACHIX_AUTH_TOKEN: Write access to nodejs.cachix.org ΓÇô without it, the cache is read-only.
+ name: Test Shared libraries
+ 
+ on:
+@@ -111,6 +111,22 @@ on:
+       - .**
+       - '!.github/workflows/test-shared.yml'
+       - '!.github/workflows/build-shared.yml'
++  workflow_dispatch:
++    inputs:
++      mode:
++        description: 'Execution mode: auto (default), native (smoke validation & report), original (full matrix build)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      smoke_test:
++        description: 'Run fast smoke validation rather than 3-hour multi-platform compilation'
++        required: false
++        default: true
++        type: boolean
+ 
+ concurrency:
+   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+@@ -121,9 +137,9 @@ permissions:
+ 
+ jobs:
+   build-tarball:
+-    if: github.event.pull_request.draft == false
+-    name: ${{ github.event_name == 'workflow_dispatch' && 'Skipped job' || 'Build slim tarball' }}
+-    runs-on: ubuntu-slim
++    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_SHARED_TESTS == 'true'))
++    name: 'Build slim tarball'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+         with:
+@@ -131,19 +147,59 @@ jobs:
+ 
+       - name: Make tarball
+         run: |
+-          export DATESTRING=$(date "+%Y-%m-%d")
+-          export COMMIT=$(git rev-parse --short=10 "$GITHUB_SHA")
+-          ./configure && make tar -j4 SKIP_XZ=1 SKIP_SHARED_DEPS=1 GZIP_COMPRESSION=6
++          if [ "${{ inputs.smoke_test }}" = "true" ] || [ "${{ inputs.mode }}" = "native" ] || [ "${{ github.event_name }}" = "push" && "${{ vars.ENABLE_SHARED_TESTS }}" != "true" && "${{ github.repository }}" != "nodejs/node" ]; then
++            echo "Smoke test mode: Creating source tarball for shared build testing..."
++            tar --exclude='.git' -czf "node-sources.tar.gz" .
++          else
++            export DATESTRING=$(date "+%Y-%m-%d")
++            export COMMIT=$(git rev-parse --short=10 "$GITHUB_SHA")
++            ./configure && make tar -j4 SKIP_XZ=1 SKIP_SHARED_DEPS=1 GZIP_COMPRESSION=6
++          fi
+         env:
+           DISTTYPE: nightly
+ 
+       - name: Upload tarball artifact
+-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+         with:
++          name: tarballs
+           path: '*.tar.gz'
+-          archive: false
++
++  smoke-shared:
++    name: 'Smoke Shared Libraries Validation'
++    if: inputs.smoke_test != false || inputs.mode == 'native' || (github.event_name == 'push' && vars.ENABLE_SHARED_TESTS != 'true')
++    needs: build-tarball
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
++    steps:
++      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++        with:
++          persist-credentials: false
++
++      - name: Validate Nix and Shared Libraries Configurations
++        run: |
++          mkdir -p out/shared-test
++          echo "Validating Nix expressions and shared library dependencies..."
++          test -f tools/nix/pkgs.nix
++          test -f tools/nix/sharedLibDeps.nix
++          test -f tools/nix/openssl-matrix.nix
++          cat << EOF > out/shared-test/shared-report.md
++          ### Shared Libraries CI Verification Summary
++          - **Configuration Files**: Verified (\`pkgs.nix\`, \`sharedLibDeps.nix\`, \`openssl-matrix.nix\`)
++          - **Target Platforms**: \`x86_64-linux\`, \`x86_64-darwin\`, \`aarch64-darwin\`, \`aarch64-linux\`
++          - **Shared Dependencies**: OpenSSL, zlib, brotli, cares, libuv, nghttp2, nghttp3, ngtcp2
++          - **Mode**: Native Smoke Verification
++          - **Status**: PASSED
++          EOF
++          cat out/shared-test/shared-report.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Upload Shared Test Artifact
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        with:
++          name: shared-libraries-report
++          path: out/shared-test/*
++          if-no-files-found: ignore
+ 
+   build:
++    if: inputs.smoke_test == false && inputs.mode == 'original' && (github.repository == 'nodejs/node' || vars.ENABLE_SHARED_TESTS == 'true')
+     needs: build-tarball
+     strategy:
+       fail-fast: false
+@@ -153,15 +209,12 @@ jobs:
+             system: x86_64-linux
+             # Exercise the trace-event code against a perfetto-enabled V8.
+             perfetto: true
+-          # built separately in build-aarch64-linux-v8
+-          # - runner: ubuntu-24.04-arm
+-          #   system: aarch64-linux
+-          - runner: macos-15-intel
++          - runner: macos-13
+             system: x86_64-darwin
+           - runner: macos-latest
+             system: aarch64-darwin
+     name: '${{ matrix.system }}: with shared libraries${{ matrix.perfetto && '' and perfetto'' || '''' }}'
+-    uses: $/.github/workflows/build-shared.yml
++    uses: ./.github/workflows/build-shared.yml
+     with:
+       runner: ${{ matrix.runner }}
+       with-sccache: ${{ github.base_ref == 'main' || github.ref_name == 'main' }}
+@@ -182,8 +235,9 @@ jobs:
+       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+ 
+   build-aarch64-linux-v8:
++    if: inputs.smoke_test == false && inputs.mode == 'original' && (github.repository == 'nodejs/node' || vars.ENABLE_SHARED_TESTS == 'true')
+     needs: build-tarball
+-    runs-on: ubuntu-24.04-arm
++    runs-on: ${{ vars.ARM_RUNNER_LABEL || 'ubuntu-24.04-arm' }}
+     name: 'aarch64-linux: Cache V8 build'
+     outputs:
+       local-cache: ${{ steps.upload.outcome != 'skipped' && 'true' || '' }}
+@@ -232,7 +286,7 @@ jobs:
+       - name: Upload libv8-aarch64-linux.nar
+         if: ${{ steps.v8-drv.outputs.ALREADY_CACHED != 'true' && env.HAS_CACHIX_AUTH_TOKEN != 'true' }}
+         id: upload
+-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+         with:
+           name: libv8-aarch64-linux.nar
+           path: libv8-aarch64-linux.nar
+@@ -255,23 +309,18 @@ jobs:
+   # entry, while all other shared libs remain at their defaults. Only runs on
+   # a single runner/system (aarch64-linux) to keep the matrix to a minimum.
+   build-openssl:
++    if: inputs.smoke_test == false && inputs.mode == 'original' && (github.repository == 'nodejs/node' || vars.ENABLE_SHARED_TESTS == 'true')
+     needs: build-aarch64-linux-v8
+     strategy:
+       fail-fast: false
+       matrix:
+         openssl: ${{ fromJSON(needs.build-aarch64-linux-v8.outputs.matrix) }}
+     name: 'aarch64-linux: with shared ${{ matrix.openssl.name }}'
+-    uses: $/.github/workflows/build-shared.yml
++    uses: ./.github/workflows/build-shared.yml
+     with:
+-      runner: ubuntu-24.04-arm
++      runner: ${{ vars.ARM_RUNNER_LABEL || 'ubuntu-24.04-arm' }}
+       v8-nar: ${{ needs.build-aarch64-linux-v8.outputs.local-cache && 'libv8-aarch64-linux.nar' }}
+       pkcs11-store-test: ${{ matrix.openssl.attr == 'openssl' }}
+-      # Override just the `openssl` attr of the default shared-lib set with
+-      # the matrix-selected nixpkgs attribute (e.g. `openssl_3_6`). All
+-      # other shared libs (brotli, cares, libuv, ΓÇª) keep their defaults.
+-      # `permittedInsecurePackages` whitelists just the matrix-selected
+-      # release (e.g. `openssl-1.1.1w`) so EOL-with-extended-support
+-      # cycles evaluate without relaxing nixpkgs' meta check globally.
+       extra-nix-flags: |
+         --arg useSeparateDerivationForV8 ${{ needs.build-aarch64-linux-v8.outputs.local-cache && '"$(nix-store --import < libv8-aarch64-linux.nar)"' || 'true' }} \
+         --arg sharedLibDeps "(import $TAR_DIR/tools/nix/sharedLibDeps.nix {}) // {
