@@ -53,7 +53,7 @@ jobs:
         with:
           ref: ${{ env.STAGING_BRANCH }}
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: 100
 
       - name: Install Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
@@ -89,13 +89,34 @@ jobs:
       - name: Start git node release prepare
         run: |
           mkdir -p reports
-          if [ -f "tools/actions/create-release-proposal.sh" ]; then
-            SCRIPT="tools/actions/create-release-proposal.sh"
-          else
-            curl -fsSL -H "Authorization: token ${GH_TOKEN}" "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/tools/actions/create-release-proposal.sh" -o /tmp/create-release-proposal.sh
-            SCRIPT="/tmp/create-release-proposal.sh"
+          git node release --prepare --skipBranchDiff --yes --releaseDate "${RELEASE_DATE}"
+
+          HEAD_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          HEAD_SHA="$(git rev-parse HEAD^)"
+          TITLE="$(git log -1 --format=%s)"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "Dry-run mode active: release prepare completed locally. Skipping remote branch and PR creation."
+            cat << EOF > reports/release-proposal-summary.md
+          # 📦 Release Proposal Simulation (Dry Run)
+          - **Release Line**: v${RELEASE_LINE}.x
+          - **Release Date**: ${RELEASE_DATE}
+          - **Proposed Commit Title**: ${TITLE}
+          - **Local Proposal Branch**: ${HEAD_BRANCH}
+          - **Base Commit**: ${HEAD_SHA}
+          - **Mode**: GitHub-Native Alternative (Dry Run)
+
+          ### Verification Result
+          Local release preparation completed successfully without modifying remote repository.
+          EOF
+            cat reports/release-proposal-summary.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          sh "$SCRIPT" "${RELEASE_DATE}" "${RELEASE_LINE}" "${GITHUB_ACTOR}"
+
+          # Full non-dry-run execution
+          curl -fsSL -H "Authorization: token ${GH_TOKEN}" \
+            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/tools/actions/create-release-proposal.sh" | \
+            sh -s -- "${RELEASE_DATE}" "${RELEASE_LINE}" "${GITHUB_ACTOR}"
         env:
           GH_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
           BOT_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}

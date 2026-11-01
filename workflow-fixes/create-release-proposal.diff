@@ -1,5 +1,5 @@
 ﻿diff --git a/.github/workflows/create-release-proposal.yml b/.github/workflows/create-release-proposal.yml
-index 735b15ffd12..2065d35c52f 100644
+index 735b15ffd12..a29da7edd01 100644
 --- a/.github/workflows/create-release-proposal.yml
 +++ b/.github/workflows/create-release-proposal.yml
 @@ -1,6 +1,3 @@
@@ -62,7 +62,7 @@ index 735b15ffd12..2065d35c52f 100644
          with:
            ref: ${{ env.STAGING_BRANCH }}
            persist-credentials: false
-+          fetch-depth: 0
++          fetch-depth: 100
  
 -      # Install dependencies
        - name: Install Node.js
@@ -91,7 +91,7 @@ index 735b15ffd12..2065d35c52f 100644
  
        - name: Setup git author
          run: |
-@@ -71,11 +87,24 @@ jobs:
+@@ -71,11 +87,45 @@ jobs:
            git config --local user.name "Node.js GitHub Bot"
  
        - name: Start git node release prepare
@@ -100,13 +100,34 @@ index 735b15ffd12..2065d35c52f 100644
 -          curl -fsSL https://github.com/${GITHUB_REPOSITORY}/raw/${GITHUB_SHA}/tools/actions/create-release-proposal.sh |\
 -          sh -s -- "${RELEASE_DATE}" "${RELEASE_LINE}" "${GITHUB_ACTOR}"
 +          mkdir -p reports
-+          if [ -f "tools/actions/create-release-proposal.sh" ]; then
-+            SCRIPT="tools/actions/create-release-proposal.sh"
-+          else
-+            curl -fsSL -H "Authorization: token ${GH_TOKEN}" "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/tools/actions/create-release-proposal.sh" -o /tmp/create-release-proposal.sh
-+            SCRIPT="/tmp/create-release-proposal.sh"
++          git node release --prepare --skipBranchDiff --yes --releaseDate "${RELEASE_DATE}"
++
++          HEAD_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
++          HEAD_SHA="$(git rev-parse HEAD^)"
++          TITLE="$(git log -1 --format=%s)"
++
++          if [ "${{ inputs.dry_run }}" = "true" ]; then
++            echo "Dry-run mode active: release prepare completed locally. Skipping remote branch and PR creation."
++            cat << EOF > reports/release-proposal-summary.md
++          # ≡ƒôª Release Proposal Simulation (Dry Run)
++          - **Release Line**: v${RELEASE_LINE}.x
++          - **Release Date**: ${RELEASE_DATE}
++          - **Proposed Commit Title**: ${TITLE}
++          - **Local Proposal Branch**: ${HEAD_BRANCH}
++          - **Base Commit**: ${HEAD_SHA}
++          - **Mode**: GitHub-Native Alternative (Dry Run)
++
++          ### Verification Result
++          Local release preparation completed successfully without modifying remote repository.
++          EOF
++            cat reports/release-proposal-summary.md >> "$GITHUB_STEP_SUMMARY"
++            exit 0
 +          fi
-+          sh "$SCRIPT" "${RELEASE_DATE}" "${RELEASE_LINE}" "${GITHUB_ACTOR}"
++
++          # Full non-dry-run execution
++          curl -fsSL -H "Authorization: token ${GH_TOKEN}" \
++            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_SHA}/tools/actions/create-release-proposal.sh" | \
++            sh -s -- "${RELEASE_DATE}" "${RELEASE_LINE}" "${GITHUB_ACTOR}"
          env:
 -          GH_TOKEN: ${{ github.token }}
 -          # We want the bot to push the push the release commit so CI runs on it.
