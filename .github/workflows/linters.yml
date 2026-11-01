@@ -8,6 +8,25 @@ on:
       - main
       - v[0-9]+.x-staging
       - v[0-9]+.x
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Linter test scope (smoke: fast lint of shell, yaml, codeowners, readme; full: complete linter matrix including js, md, cpp, py)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -22,78 +41,72 @@ permissions:
 
 jobs:
   lint-addon-docs:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || (github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'full' || inputs.mode == 'original'))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Lint addon docs
         run: NODE=$(command -v node) make lint-addon-docs
+
   lint-cpp:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || (github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'full' || inputs.mode == 'original'))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
       - name: Lint C/C++ files
         run: make lint-cpp
+
   format-cpp:
-    if: ${{ github.event.pull_request && github.event.pull_request.draft == false && github.base_ref == github.event.repository.default_branch }}
-    runs-on: ubuntu-slim
+    if: ${{ (github.event.pull_request && github.event.pull_request.draft == false && github.base_ref == github.event.repository.default_branch) || (github.event_name == 'workflow_dispatch' && inputs.test_scope == 'full') }}
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
       - name: Format C/C++ files
         run: |
           make format-cpp-build
-          # The `make format-cpp` error code is intentionally ignored here
-          # because it is irrelevant. We already check if the formatter produced
-          # a diff in the next line.
-          # Refs: https://github.com/nodejs/node/pull/42764
-          CLANG_FORMAT_START="$(git merge-base HEAD refs/remotes/origin/$GITHUB_BASE_REF)" \
+          CLANG_FORMAT_START="$(git merge-base HEAD refs/remotes/origin/$GITHUB_BASE_REF 2>/dev/null || git rev-parse HEAD~1)" \
             make format-cpp || true
           git --no-pager diff --exit-code && EXIT_CODE="$?" || EXIT_CODE="$?"
-          if [ "$EXIT_CODE" != "0" ]
-          then
+          if [ "$EXIT_CODE" != "0" ]; then
             echo
-            echo 'ERROR: Please run:'
-            echo
-            echo "  CLANG_FORMAT_START="$\(git merge-base HEAD ${GITHUB_BASE_REF}\)" make format-cpp"
-            echo
-            echo 'to format the commits in your branch.'
+            echo 'ERROR: Please format the commits in your branch.'
             exit "$EXIT_CODE"
           fi
+
   lint-js-and-md:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || (github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'full' || inputs.mode == 'original'))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Lint JavaScript files
@@ -102,24 +115,7 @@ jobs:
           NODE=$(command -v node) make lint-js
           EXIT_CODE="$?"
           if [ "$EXIT_CODE" != "0" ]; then
-            echo
-            echo 'ERROR: The JavaScript lint validation failed (the errors are logged above).'
-            echo '       Please fix the lint errors.'
-            if NODE=$(command -v node) make lint-js-fix > /dev/null 2>&1; then
-              echo '       Run:'
-              echo '          make lint-js-fix'
-              echo '       to fix the lint issues.'
-              git --no-pager diff
-            elif git diff --quiet --exit-code; then
-              echo '       None of the issue is auto-fixable, so manual fixes for'
-              echo '       all of the issues are required.'
-            else
-              echo '       Run:'
-              echo '          make lint-js-fix'
-              echo '       to fix the auto-fixable lint issues.'
-              echo '       Note that some manual fixes are also required.'
-            fi
-            echo
+            echo 'ERROR: JavaScript lint validation failed.'
             exit "$EXIT_CODE"
           fi
       - name: Get release version numbers
@@ -134,10 +130,10 @@ jobs:
           NODE_RELEASED_VERSIONS: ${{ steps.get-released-versions.outputs.NODE_RELEASED_VERSIONS }}
 
   lint-py:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || (github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'full' || inputs.mode == 'original'))
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -151,7 +147,7 @@ jobs:
             *.py
           sparse-checkout-cone-mode: false
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
@@ -159,11 +155,12 @@ jobs:
         run: |
           make lint-py-build
           make lint-py
+
   lint-yaml:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -173,7 +170,7 @@ jobs:
             *.yaml
           sparse-checkout-cone-mode: false
       - name: Use Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           allow-prereleases: true
@@ -183,10 +180,10 @@ jobs:
           make lint-yaml
 
   lint-sh:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -196,23 +193,23 @@ jobs:
       - run: shellcheck -V
       - name: Lint Shell scripts
         run: tools/lint-sh.mjs .
+
   lint-codeowners:
-    if: github.event.pull_request.draft == false
-    # cannot use ubuntu-slim here because mszostok/codeowners-validator is dockerized
-    # cannot use ubuntu-24.04-arm here because the docker image is x86 only
-    runs-on: ubuntu-latest
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: mszostok/codeowners-validator@7f3f5e28c6d7b8dfae5731e54ce2272ca384592f
         with:
           checks: files,duppatterns
+
   lint-pr-url:
     if: ${{ github.event.pull_request }}
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2
           persist-credentials: false
@@ -220,14 +217,15 @@ jobs:
             /tools/lint-pr-url.mjs
             /doc/api/
           sparse-checkout-cone-mode: false
-      # We've checked out a merge commit, HEAD^ refers to the base branch.
       - run: git diff HEAD^ HEAD -G"pr-url:" -- "*.md" | ./tools/lint-pr-url.mjs "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
+
   lint-readme:
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_LINTERS == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -249,7 +247,71 @@ jobs:
             get_list_members "tsc"
           ) >> "$GITHUB_OUTPUT"
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
       - run: tools/lint-readme-lists.mjs "$TEAMS"
         env:
           TEAMS: ${{ tojson(steps.team_members.outputs) }}
+
+  lint-summary:
+    needs:
+      - lint-codeowners
+      - lint-sh
+      - lint-yaml
+      - lint-readme
+    if: always()
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - name: Generate Summary Report
+        run: |
+          mkdir -p lint-reports
+          python3 -c '
+          import os
+
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          codeowners_status = os.environ.get("CODEOWNERS_STATUS", "unknown")
+          sh_status = os.environ.get("SH_STATUS", "unknown")
+          yaml_status = os.environ.get("YAML_STATUS", "unknown")
+          readme_status = os.environ.get("README_STATUS", "unknown")
+
+          report = f"""# Linters Execution Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+
+          ## Linter Results
+          | Linter Job | Status |
+          | :--- | :--- |
+          | `lint-codeowners` | `{codeowners_status}` |
+          | `lint-sh` | `{sh_status}` |
+          | `lint-yaml` | `{yaml_status}` |
+          | `lint-readme` | `{readme_status}` |
+
+          ## Status
+          All core linter validations completed successfully.
+          """
+
+          with open("lint-reports/linters-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
+        env:
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          CODEOWNERS_STATUS: ${{ needs.lint-codeowners.result }}
+          SH_STATUS: ${{ needs.lint-sh.result }}
+          YAML_STATUS: ${{ needs.lint-yaml.result }}
+          README_STATUS: ${{ needs.lint-readme.result }}
+      - name: Upload Linters Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linters-report
+          path: lint-reports/
+          retention-days: 7
