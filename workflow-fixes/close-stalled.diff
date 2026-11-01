@@ -1,0 +1,167 @@
+﻿diff --git a/.github/workflows/close-stalled.yml b/.github/workflows/close-stalled.yml
+index 3c7ab04339d..4b2ecc6edb4 100644
+--- a/.github/workflows/close-stalled.yml
++++ b/.github/workflows/close-stalled.yml
+@@ -1,7 +1,34 @@
+ name: Close stalled issues and PRs
++
+ on:
+   schedule:
+     - cron: 0 0 * * *
++  workflow_dispatch:
++    inputs:
++      mode:
++        description: 'Execution mode (auto, native, original)'
++        required: false
++        default: 'auto'
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      dry_run:
++        description: 'Audit stalled issues and PRs without actually closing them'
++        required: false
++        default: true
++        type: boolean
++      days_before_close:
++        description: 'Days before closing stalled items'
++        required: false
++        default: 30
++        type: number
++      operations_per_run:
++        description: 'Max API operations per run'
++        required: false
++        default: 100
++        type: number
+ 
+ env:
+   CLOSE_MESSAGE: >
+@@ -14,23 +41,119 @@ permissions:
+ 
+ jobs:
+   stale:
++    name: Process Stalled Issues & PRs
+     permissions:
+       issues: write  # for actions/stale to close stale issues
+       pull-requests: write  # for actions/stale to close stale PRs
+-    if: github.repository == 'nodejs/node'
+-    runs-on: ubuntu-slim
++    if: github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_CLOSE_STALLED == 'true'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93  # v11.0.0
++      - name: Resolve Execution Mode
++        id: mode_resolver
++        shell: bash
++        run: |
++          MODE="${{ inputs.mode || 'auto' }}"
++          DRY_RUN="${{ inputs.dry_run }}"
++          if [ -z "$DRY_RUN" ]; then
++            if [ "$MODE" = "original" ]; then
++              DRY_RUN="false"
++            else
++              DRY_RUN="true"
++            fi
++          fi
++
++          if [ "$MODE" = "auto" ]; then
++            if [ "$DRY_RUN" = "true" ]; then
++              RESOLVED_MODE="native"
++            else
++              RESOLVED_MODE="original"
++            fi
++          else
++            RESOLVED_MODE="$MODE"
++          fi
++
++          echo "Selected mode: $MODE -> Resolved mode: $RESOLVED_MODE (dry_run=$DRY_RUN)"
++          echo "RESOLVED_MODE=$RESOLVED_MODE" >> "$GITHUB_ENV"
++          echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
++
++      # Active GitHub-Native Audit & Summary Step
++      - name: Audit Stalled Issues and PRs (Native Mode)
++        if: env.RESOLVED_MODE == 'native' || env.DRY_RUN == 'true'
++        shell: bash
++        run: |
++          echo "### Close Stalled Issues & PRs Audit Summary" > close-stalled-report.md
++          echo "" >> close-stalled-report.md
++          echo "- **Execution Mode**: \`$RESOLVED_MODE\`" >> close-stalled-report.md
++          echo "- **Dry Run**: \`$DRY_RUN\`" >> close-stalled-report.md
++          echo "- **Days Before Close Threshold**: \`${{ inputs.days_before_close || 30 }}\`" >> close-stalled-report.md
++          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%SZ')" >> close-stalled-report.md
++          echo "" >> close-stalled-report.md
++
++          echo "#### Stalled Pull Requests" >> close-stalled-report.md
++          echo "| Number | Title | State | Updated At | Action |" >> close-stalled-report.md
++          echo "| :--- | :--- | :--- | :--- | :--- |" >> close-stalled-report.md
++
++          prs=$(gh pr list --repo "$GITHUB_REPOSITORY" --label "stalled" --state open --limit 20 --json number,title,updatedAt 2>/dev/null || echo "[]")
++          pr_count=$(echo "$prs" | jq '. | length' 2>/dev/null || echo 0)
++          if [ "$pr_count" -gt 0 ]; then
++            echo "$prs" | jq -r '.[] | "| #\(.number) | \(.title | gsub("[\\|\n]"; " ")) | open | \(.updatedAt) | Would Close (Dry-Run) |"' >> close-stalled-report.md
++          else
++            echo "| ΓÇö | *No open PRs labeled 'stalled'* | ΓÇö | ΓÇö | None |" >> close-stalled-report.md
++          fi
++
++          echo "" >> close-stalled-report.md
++          echo "#### Stalled Issues" >> close-stalled-report.md
++          echo "| Number | Title | State | Updated At | Action |" >> close-stalled-report.md
++          echo "| :--- | :--- | :--- | :--- | :--- |" >> close-stalled-report.md
++
++          issues=$(gh issue list --repo "$GITHUB_REPOSITORY" --label "stalled" --state open --limit 20 --json number,title,updatedAt 2>/dev/null || echo "[]")
++          issue_count=$(echo "$issues" | jq '. | length' 2>/dev/null || echo 0)
++          if [ "$issue_count" -gt 0 ]; then
++            echo "$issues" | jq -r '.[] | "| #\(.number) | \(.title | gsub("[\\|\n]"; " ")) | open | \(.updatedAt) | Would Close (Dry-Run) |"' >> close-stalled-report.md
++          else
++            echo "| ΓÇö | *No open issues labeled 'stalled'* | ΓÇö | ΓÇö | None |" >> close-stalled-report.md
++          fi
++
++          cat close-stalled-report.md >> "$GITHUB_STEP_SUMMARY"
++        env:
++          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
++
++      # Execute actions/stale in debug-only (dry-run) mode
++      - name: Process Stale Items (Dry-Run Mode)
++        if: env.RESOLVED_MODE == 'native' || env.DRY_RUN == 'true'
++        uses: actions/stale@28ca1036281a0e5922ea510a4c27907774e80553  # v9.0.0
+         with:
+           repo-token: ${{ secrets.GITHUB_TOKEN }}
+-          days-before-close: 30
++          days-before-close: ${{ inputs.days_before_close || 30 }}
+           stale-pr-label: stalled
+           stale-issue-label: stalled
+           close-issue-message: ${{ env.CLOSE_MESSAGE }}
+           close-pr-message: ${{ env.CLOSE_MESSAGE }}
+-          # used to filter issues to check whether or not should be closed, avoids hitting maximum operations allowed if needing to paginate through all open issues
+           only-labels: stalled
+-          # max requests it will send per run to the GitHub API before it deliberately exits to avoid hitting API rate limits
+-          operations-per-run: 500
+-          # deactivates automatic stale labelling as we prefer to do that manually
++          operations-per-run: ${{ inputs.operations_per_run || 100 }}
+           days-before-stale: -1
++          debug-only: true
++
++      # Execute actions/stale in live mutation mode (Original Mode)
++      - name: Process Stale Items (Live Original Mode)
++        if: env.RESOLVED_MODE == 'original' && env.DRY_RUN == 'false'
++        uses: actions/stale@28ca1036281a0e5922ea510a4c27907774e80553  # v9.0.0
++        with:
++          repo-token: ${{ secrets.GITHUB_TOKEN }}
++          days-before-close: ${{ inputs.days_before_close || 30 }}
++          stale-pr-label: stalled
++          stale-issue-label: stalled
++          close-issue-message: ${{ env.CLOSE_MESSAGE }}
++          close-pr-message: ${{ env.CLOSE_MESSAGE }}
++          only-labels: stalled
++          operations-per-run: ${{ inputs.operations_per_run || 500 }}
++          days-before-stale: -1
++          debug-only: false
++
++      - name: Upload Close Stalled Report
++        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
++        if: always()
++        with:
++          name: close-stalled-report
++          path: close-stalled-report.md
++          if-no-files-found: ignore
