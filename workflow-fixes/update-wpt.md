@@ -75,7 +75,37 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: `41354236110`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41354236110](https://github.com/sajuptpm/node/actions/runs/41354236110)
+- **Workflow**: `WPT update`
+- **Trigger**: `workflow_dispatch` (inputs: `subsystems: "url"`, `mode: "native"`, `dry_run: true`)
+- **Conclusion**: `success` (`✓`)
+- **Total Duration**: 27 seconds (excluding queue time)
+
+### Execution Timeline
+
+| Job Name | Job ID | Duration | Status | Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `Collect Subsystems` | `124990757414` | 4s | `completed` | `success` |
+| `Update WPT (url)` | `124991585145` | 23s | `completed` | `success` |
+
+### Key Step Execution Summary
+1. **Resolve Subsystem Matrix**: Dynamic resolver resolved `"url"` into JSON matrix `["url"]` (`success`).
+2. **Checkout repository**: Checked out repository tree (`success`).
+3. **Install Node.js & @node-core/utils**: Installed active LTS Node.js and `@node-core/utils` globally (`success`).
+4. **Setup @node-core/utils**: Configured username (`sajuptpm`), token (`GITHUB_TOKEN`), owner (`sajuptpm`), and repo (`node`) non-interactively without prompt hang (`success`).
+5. **Update WPT for subsystem url**: Dry-run simulation extracted target commit from upstream master and generated `out/wpt-update/url-update.json` (`success`).
+6. **Retrieve new version commit**: Read long and short version commits safely into `$GITHUB_ENV` (`success`).
+7. **Resolve Execution Mode**: Dynamically resolved mode to `native` (`success`).
+8. **Native Mode - Summary and Artifact Report**: Generated markdown audit proposal and appended to `$GITHUB_STEP_SUMMARY` (`success`).
+9. **Upload WPT Update Artifact**: Uploaded `wpt-update-url-report` artifact with generated metadata (`success`).
+10. **Original Mode PR Creation**: Safely skipped remote mutation (`skipped`).
+
+### Generated Artifacts
+- **Artifact Name**: `wpt-update-url-report`
+- **Artifact Content**:
+  - `out/wpt-update/url-update.json`
+  - `out/wpt-update/url-proposal.md`
 
 ---
 
