@@ -94,8 +94,14 @@ jobs:
           if [ -n "$NIGHTLY_REF" ]; then
             echo "checkout_ref=$NIGHTLY_REF" >> "$GITHUB_OUTPUT"
           elif [ -n "$NODE_VER" ]; then
-            MAJOR="${NODE_VER%%.*}"
-            echo "checkout_ref=v${MAJOR}.x-staging" >> "$GITHUB_OUTPUT"
+            CLEAN_VER="${NODE_VER#v}"
+            MAJOR="${CLEAN_VER%%.*}"
+            CANDIDATE="v${MAJOR}.x-staging"
+            if git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" "$CANDIDATE" >/dev/null 2>&1; then
+              echo "checkout_ref=$CANDIDATE" >> "$GITHUB_OUTPUT"
+            else
+              echo "checkout_ref=main" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "checkout_ref=main" >> "$GITHUB_OUTPUT"
           fi
