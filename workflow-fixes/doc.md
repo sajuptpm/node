@@ -71,7 +71,38 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41362663745`](https://github.com/sajuptpm/node/actions/runs/41362663745)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41362663745](https://github.com/sajuptpm/node/actions/runs/41362663745)
+- **Workflow**: Test and upload documentation to artifacts (`.github/workflows/doc.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `test_scope: smoke`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 2m 1s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `build-docs` | Set up job | Completed | 3s |
+| `build-docs` | Run actions/checkout@v4 | Completed | 7s |
+| `build-docs` | Set up Python | Completed | 3s |
+| `build-docs` | Use Node.js lts/* | Completed | 2s |
+| `build-docs` | Resolve Execution Mode & Scope | Completed | 1s |
+| `build-docs` | Build | Completed | 1m 35s |
+| `build-docs` | Generate Summary Report | Completed | 1s |
+| `build-docs` | Upload Documentation Artifacts | Completed | 3s |
+| `build-docs` | Test (Full Scope) | Skipped | 0s |
+| `build-docs` | Test (Smoke Scope) | Completed | 1s |
+| `build-docs` | Post Use Node.js lts/* | Completed | 1s |
+| `build-docs` | Post Set up Python | Completed | 1s |
+| `build-docs` | Post Run actions/checkout@v4 | Completed | 1s |
+| `build-docs` | Complete job | Completed | 1s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `docs` | ~21.7 MB (991 files) | Full Node.js HTML and JSON documentation package, llms.txt, API manifests, and summary report |
 
 ---
 
