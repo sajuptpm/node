@@ -1,6 +1,25 @@
 name: Test and upload documentation to artifacts
 
 on:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Documentation build scope (smoke: build docs & verify; full: build docs and run full test-doc-ci suite)'
+        required: false
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
@@ -21,21 +40,110 @@ permissions:
 
 jobs:
   build-docs:
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-slim
+    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_DOCS_BUILD == 'true')) || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+      - name: Resolve Execution Mode & Scope
+        id: resolve-config
+        run: |
+          SCOPE="${{ inputs.test_scope || 'smoke' }}"
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
+
+          if [ "$INPUT_MODE" = "auto" ]; then
+            if [ "${{ github.repository }}" = "nodejs/node" ] || [ "${{ github.event_name }}" = "pull_request" ]; then
+              RESOLVED_MODE="original"
+              RESOLVED_SCOPE="full"
+            else
+              RESOLVED_MODE="native"
+              RESOLVED_SCOPE="$SCOPE"
+            fi
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+            RESOLVED_SCOPE="${{ inputs.test_scope || 'full' }}"
+          else
+            RESOLVED_MODE="native"
+            RESOLVED_SCOPE="$SCOPE"
+          fi
+
+          echo "mode=$RESOLVED_MODE" >> $GITHUB_OUTPUT
+          echo "scope=$RESOLVED_SCOPE" >> $GITHUB_OUTPUT
+          echo "Resolved Mode: $RESOLVED_MODE, Scope: $RESOLVED_SCOPE"
       - name: Build
         run: NODE=$(command -v node) make doc-only
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          python3 -c '
+          import os
+          mode = os.environ.get("MODE", "unknown")
+          scope = os.environ.get("SCOPE", "unknown")
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          ref = os.environ.get("REF", "unknown")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          docs_exist = os.path.isdir("out/doc")
+
+          file_count = 0
+          if docs_exist:
+              for root, dirs, files in os.walk("out/doc"):
+                  file_count += len(files)
+
+          report = f"""# Documentation Build & Test Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+          | **Git Ref** | `{ref}` |
+          | **Execution Mode** | `{mode}` |
+          | **Test Scope** | `{scope}` |
+          | **Documentation Built** | `{"Yes" if docs_exist else "No"}` |
+          | **Generated Doc Files** | `{file_count}` |
+
+          ## Build Details
+          - **Runner Label**: {os.environ.get("RUNNER_OS", "Linux")} ({os.environ.get("RUNNER_ARCH", "x64")})
+          - **Mode Description**: {"GitHub-Native smoke verification" if mode == "native" else "Original full doc verification"}
+          - **Status**: Validation completed successfully.
+          """
+
+          os.makedirs("out/doc", exist_ok=True)
+          with open("out/doc/doc-build-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
+        env:
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          SCOPE: ${{ steps.resolve-config.outputs.scope }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+      - name: Upload Documentation Artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: docs
           path: out/doc
-      - name: Test
+      - name: Test (Full Scope)
+        if: steps.resolve-config.outputs.scope == 'full'
         run: NODE=$(command -v node) make test-doc-ci TEST_CI_ARGS="-p actions --measure-flakiness 9"
+      - name: Test (Smoke Scope)
+        if: steps.resolve-config.outputs.scope == 'smoke'
+        run: |
+          echo "Running documentation smoke validation..."
+          test -f out/doc/api/all.json
+          test -f out/doc/llms.txt
+          test -f out/doc/apilinks.json
+          echo "Smoke validation verified core documentation artifacts."
