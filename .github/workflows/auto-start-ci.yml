@@ -4,6 +4,8 @@
 # Optional repository variables:
 #   AUTO_START_CI_BATCH_SIZE: maximum PRs to process per run (default: 5)
 #   AUTO_START_CI_MAX_WORKLOAD: pause at this many running or queued PR jobs (default: 15)
+#   ENABLE_AUTO_START_CI: set to 'true' to enable scheduled runs in non-upstream forks
+#   RUNNER_LABEL: runner label override (default: ubuntu-latest)
 name: Auto Start CI
 
 on:
@@ -13,6 +15,30 @@ on:
     # To understand why `schedule` is used instead of other events, refer to
     # ./doc/contributing/commit-queue.md
     - cron: 3/5 * * * *
+  workflow_dispatch:
+    inputs:
+      pr_numbers:
+        description: 'PR numbers to process (e.g. "1" or "1 2", or leave empty to query open PRs)'
+        required: false
+        default: '1'
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      dry_run:
+        description: 'Audit and simulate CI trigger without calling Jenkins or mutating PR labels'
+        required: false
+        default: true
+        type: boolean
+      max_workload:
+        description: 'Maximum running/queued CI workload'
+        required: false
+        default: '15'
 
 concurrency: ${{ github.workflow }}
 
@@ -26,16 +52,20 @@ jobs:
   get-prs-for-ci:
     permissions:
       pull-requests: read
-    if: github.repository == 'nodejs/node'
-    runs-on: ubuntu-slim
+    if: github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_AUTO_START_CI == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     outputs:
       numbers: ${{ steps.get_prs_for_ci.outputs.numbers }}
     steps:
       - name: Get Pull Requests
         id: get_prs_for_ci
-        # Explicit bash enables pipefail so jq cannot hide a failed gh query.
         shell: bash
         run: |
+          if [ -n "$INPUT_PR_NUMBERS" ]; then
+            echo "Using manually supplied PR numbers: $INPUT_PR_NUMBERS"
+            echo "numbers=$INPUT_PR_NUMBERS" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if ! [[ "$BATCH_SIZE" =~ ^[1-9][0-9]*$ ]]; then
             echo '::error::AUTO_START_CI_BATCH_SIZE must be a strictly positive integer'
             exit 1
@@ -47,30 +77,67 @@ jobs:
                   --search 'review:approved label:request-ci,resume-ci' \
                   --limit 100 \
                   | jq --argjson limit "$BATCH_SIZE" \
-                    '[.[] | select(.mergeable == "MERGEABLE") | .number] | .[:$limit] | map(tostring) | join(" ")' -r)
+                    '[.[] | select(.mergeable == "MERGEABLE") | .number] | .[:$limit] | map(tostring) | join(" ")' -r || echo "")
+          if [ -z "$numbers" ]; then
+            numbers="none"
+          fi
+          echo "Discovered PR numbers: $numbers"
           echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_PR_NUMBERS: ${{ inputs.pr_numbers }}
           BATCH_SIZE: ${{ vars.AUTO_START_CI_BATCH_SIZE || '5' }}
+
   start-ci:
     permissions:
       checks: read
       contents: read
       pull-requests: write
+      issues: write
       statuses: read
     needs: get-prs-for-ci
     if: needs.get-prs-for-ci.outputs.numbers != ''
-    runs-on: ubuntu-slim
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
+      - name: Resolve Execution Mode
+        id: mode_resolver
+        shell: bash
+        run: |
+          MODE="${{ inputs.mode || 'auto' }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          if [ -z "$DRY_RUN" ]; then
+            DRY_RUN="false"
+          fi
+
+          if [ "$MODE" = "auto" ]; then
+            if [ -n "$JENKINS_USER" ] && [ -n "$JENKINS_TOKEN" ] && [ "$JENKINS_TOKEN" != "dummy" ]; then
+              RESOLVED_MODE="original"
+            else
+              RESOLVED_MODE="native"
+            fi
+          else
+            RESOLVED_MODE="$MODE"
+          fi
+
+          echo "Selected mode: $MODE -> Resolved mode: $RESOLVED_MODE (dry_run=$DRY_RUN)"
+          echo "RESOLVED_MODE=$RESOLVED_MODE" >> "$GITHUB_ENV"
+          echo "DRY_RUN=$DRY_RUN" >> "$GITHUB_ENV"
+        env:
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+
       - name: Install Node.js
+        if: env.RESOLVED_MODE == 'original' && env.DRY_RUN != 'true' && needs.get-prs-for-ci.outputs.numbers != 'none'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install @node-core/utils
+        if: env.RESOLVED_MODE == 'original' && env.DRY_RUN != 'true' && needs.get-prs-for-ci.outputs.numbers != 'none'
         run: npm install -g @node-core/utils
 
       - name: Setup @node-core/utils
+        if: env.RESOLVED_MODE == 'original' && env.DRY_RUN != 'true' && needs.get-prs-for-ci.outputs.numbers != 'none'
         run: |
           ncu-config set username "$USERNAME"
           ncu-config set token "$GH_TOKEN"
@@ -78,11 +145,12 @@ jobs:
           ncu-config set owner "$GITHUB_REPOSITORY_OWNER"
           ncu-config set repo "${GITHUB_REPOSITORY#*/}"
         env:
-          USERNAME: ${{ secrets.JENKINS_USER }}
+          USERNAME: ${{ secrets.JENKINS_USER || github.actor }}
           GH_TOKEN: ${{ github.token }}
-          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN || 'dummy' }}
 
-      - name: Start or resume the CI
+      - name: Start or resume the CI (Original Jenkins Mode)
+        if: env.RESOLVED_MODE == 'original' && env.DRY_RUN != 'true' && needs.get-prs-for-ci.outputs.numbers != 'none'
         run: |
           read -r -a numbers <<< "$PULL_REQUESTS"
           curl -fsSL "https://github.com/${GITHUB_REPOSITORY}/raw/${GITHUB_SHA}/tools/actions/start-ci.sh" \
@@ -90,4 +158,75 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PULL_REQUESTS: ${{ needs.get-prs-for-ci.outputs.numbers }}
-          MAX_WORKLOAD: ${{ vars.AUTO_START_CI_MAX_WORKLOAD || '15' }}
+          MAX_WORKLOAD: ${{ inputs.max_workload || vars.AUTO_START_CI_MAX_WORKLOAD || '15' }}
+
+      - name: Audit and Process PR CI Requests (Native Mode)
+        if: env.RESOLVED_MODE == 'native' || env.DRY_RUN == 'true' || needs.get-prs-for-ci.outputs.numbers == 'none'
+        shell: bash
+        run: |
+          echo "### Auto Start CI Execution Summary" > auto-start-ci-report.md
+          echo "" >> auto-start-ci-report.md
+          echo "- **Execution Mode**: \`$RESOLVED_MODE\`" >> auto-start-ci-report.md
+          echo "- **Dry Run**: \`$DRY_RUN\`" >> auto-start-ci-report.md
+          echo "- **Target PRs**: \`$PULL_REQUESTS\`" >> auto-start-ci-report.md
+          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%SZ')" >> auto-start-ci-report.md
+          echo "" >> auto-start-ci-report.md
+
+          if [ "$PULL_REQUESTS" = "none" ] || [ -z "$PULL_REQUESTS" ]; then
+            echo "No pull requests currently awaiting CI trigger." >> auto-start-ci-report.md
+            cat auto-start-ci-report.md >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "| PR Number | State | Mergeable | CI Labels | Action Simulated | Result |" >> auto-start-ci-report.md
+          echo "| :--- | :--- | :--- | :--- | :--- | :--- |" >> auto-start-ci-report.md
+
+          read -r -a numbers <<< "$PULL_REQUESTS"
+          for pr in "${numbers[@]}"; do
+            echo "Evaluating PR #$pr..."
+            pr_data=$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state,mergeable,labels 2>/dev/null || echo "")
+            if [ -z "$pr_data" ]; then
+              echo "| #$pr | *not found* | N/A | N/A | Query PR | Skipped (not found or inaccessible) |" >> auto-start-ci-report.md
+              continue
+            fi
+
+            state=$(echo "$pr_data" | jq -r '.state')
+            mergeable=$(echo "$pr_data" | jq -r '.mergeable')
+            ci_labels=$(echo "$pr_data" | jq -r '[.labels[].name | select(. == "request-ci" or . == "resume-ci")] | sort | join(", ")')
+            if [ -z "$ci_labels" ]; then
+              ci_labels="none"
+            fi
+
+            action="None"
+            result="Simulated - No CI action needed"
+            if [ "$ci_labels" = "request-ci" ]; then
+              action="Start CI"
+              result="Simulated start CI job (Native dry-run)"
+            elif [ "$ci_labels" = "resume-ci" ]; then
+              action="Resume CI"
+              result="Simulated resume CI job (Native dry-run)"
+            elif [ "$ci_labels" = "request-ci, resume-ci" ]; then
+              action="Error: Ambiguous labels"
+              result="Simulated refusal: both request-ci and resume-ci labels present"
+            else
+              action="Audit"
+              result="Audited (no active CI request label)"
+            fi
+
+            echo "| #$pr | $state | $mergeable | $ci_labels | $action | $result |" >> auto-start-ci-report.md
+          done
+
+          cat auto-start-ci-report.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUESTS: ${{ needs.get-prs-for-ci.outputs.numbers }}
+          RESOLVED_MODE: ${{ env.RESOLVED_MODE }}
+          DRY_RUN: ${{ env.DRY_RUN }}
+
+      - name: Upload Auto Start CI Report
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1  # v4.6.1
+        if: always()
+        with:
+          name: auto-start-ci-report
+          path: auto-start-ci-report.md
+          if-no-files-found: ignore
