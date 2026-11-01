@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       subsystems:
-        description: 'Subsystems JSON array to update (e.g. ["url"])'
+        description: 'Subsystems to update (url, urlpattern, WebCryptoAPI, all, or JSON array)'
         required: false
-        default: '["url"]'
+        default: 'url'
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (upstream PR creation)'
         required: false
@@ -33,13 +33,33 @@ env:
   NODE_VERSION: lts/*
 
 jobs:
-  wpt-subsystem-update:
+  collect-subsystems:
+    name: Collect Subsystems
     if: github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_WPT_UPDATE == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+    steps:
+      - name: Resolve Subsystem Matrix
+        id: resolve
+        run: |
+          REQ="${{ inputs.subsystems }}"
+          if [ -z "$REQ" ] || [ "$REQ" = "all" ]; then
+            echo 'matrix=["url", "urlpattern", "WebCryptoAPI"]' >> "$GITHUB_OUTPUT"
+          elif echo "$REQ" | jq -e . >/dev/null 2>&1; then
+            echo "matrix=$REQ" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=[\"$REQ\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  wpt-subsystem-update:
+    name: Update WPT (${{ matrix.subsystem }})
+    needs: collect-subsystems
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        subsystem: ${{ fromJSON(github.event.inputs.subsystems || '["url", "urlpattern", "WebCryptoAPI"]') }}
+        subsystem: ${{ fromJSON(needs.collect-subsystems.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
