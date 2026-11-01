@@ -79,7 +79,33 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: `41355060449`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41355060449](https://github.com/sajuptpm/node/actions/runs/41355060449)
+- **Workflow**: `Tools and deps update`
+- **Trigger**: `workflow_dispatch` (inputs: `id: "amaro"`, `mode: "native"`, `dry_run: true`)
+- **Conclusion**: `success` (`✓`)
+- **Total Duration**: 4m 14s (32 matrix jobs evaluated cleanly)
+
+### Execution Timeline (Target Dependency: `amaro`)
+
+| Job Name | Job ID | Duration | Status | Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `tools-deps-update (amaro)` | `124993245233` | 4s | `completed` | `success` |
+| `tools-deps-update (ada)` | `124993245319` | 4s | `completed` | `success` (skipped non-matching steps) |
+| Remaining 30 Matrix Jobs | Varied | ~2-4s each | `completed` | `success` (skipped non-matching steps) |
+
+### Key Step Execution Summary (`amaro`)
+1. **actions/checkout**: Checked out repository tree (`success`).
+2. **Execute dep updater script**: Ran `./tools/dep_updaters/update-amaro.sh` which verified current amaro package version (`1.1.11`) (`success`).
+3. **Check Update Status & Resolve Mode**: Inspected working tree, detected up-to-date status, and resolved mode to `native` (`success`).
+4. **Generate commit message if not set**: Set default commit message `deps: update amaro to latest` (`success`).
+5. **Native Mode - Summary & Artifact Report**: Emitted structured tools update report to `$GITHUB_STEP_SUMMARY` (`success`).
+6. **Upload Update Artifact**: Uploaded `tools-update-amaro-report` artifact (`success`).
+7. **Original Mode PR Creation**: Safely skipped remote mutation (`skipped`).
+
+### Generated Artifacts
+- **Artifact Name**: `tools-update-amaro-report` (ID: `13102918287`, size: 355 bytes)
+- **Artifact Content**: `out/tools-update/amaro-report.md` (Structured dependency update and verification report)
 
 ---
 
