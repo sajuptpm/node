@@ -76,7 +76,35 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41363074801`](https://github.com/sajuptpm/node/actions/runs/41363074801)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41363074801](https://github.com/sajuptpm/node/actions/runs/41363074801)
+- **Workflow**: Find inactive collaborators (`.github/workflows/find-inactive-collaborators.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `since: 12 months ago`, `create_pr: false`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 57s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `find` | Set up job | Completed | 3s |
+| `find` | Run actions/checkout@v4 | Completed | 43s |
+| `find` | Use Node.js lts/* | Completed | 2s |
+| `find` | Resolve Execution Mode & Parameters | Completed | 1s |
+| `find` | Find inactive collaborators | Completed | 1s |
+| `find` | Generate Summary Report | Completed | 1s |
+| `find` | Upload Inactive Collaborators Report | Completed | 2s |
+| `find` | Open pull request (Original Mode / Requested) | Skipped | 0s |
+| `find` | Post Use Node.js lts/* | Completed | 1s |
+| `find` | Post Run actions/checkout@v4 | Completed | 1s |
+| `find` | Complete job | Completed | 1s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `inactive-collaborators-report` | ~1.8 KB | Inactive collaborators audit summary markdown and `readme-collaborators.diff` |
 
 ---
 
