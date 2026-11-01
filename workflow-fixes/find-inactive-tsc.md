@@ -78,7 +78,37 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41363596179`](https://github.com/sajuptpm/node/actions/runs/41363596179)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41363596179](https://github.com/sajuptpm/node/actions/runs/41363596179)
+- **Workflow**: Find inactive TSC voting members (`.github/workflows/find-inactive-tsc.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `create_pr: false`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 1m 27s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `find` | Set up job | Completed | 3s |
+| `find` | Checkout the repo | Completed | 43s |
+| `find` | Clone nodejs/TSC repository | Completed | 35s |
+| `find` | Use Node.js lts/* | Completed | 2s |
+| `find` | Resolve Execution Mode & Parameters | Completed | 1s |
+| `find` | Find inactive TSC voting members | Completed | 1s |
+| `find` | Generate Summary Report | Completed | 1s |
+| `find` | Upload Inactive TSC Report | Completed | 2s |
+| `find` | Open pull request (Original Mode / Requested) | Skipped | 0s |
+| `find` | Post Use Node.js lts/* | Completed | 1s |
+| `find` | Post Clone nodejs/TSC repository | Completed | 1s |
+| `find` | Post Checkout the repo | Completed | 1s |
+| `find` | Complete job | Completed | 1s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `inactive-tsc-report` | ~1.5 KB | Inactive TSC audit summary, voting participation metrics (`tsc-voting-records.txt`), and `readme-tsc.diff` |
 
 ---
 
