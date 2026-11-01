@@ -76,7 +76,25 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Manual Dispatch Verification
+- **Run ID**: [`41351913405`](https://github.com/sajuptpm/node/actions/runs/41351913405)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41351913405](https://github.com/sajuptpm/node/actions/runs/41351913405)
+- **Trigger**: `workflow_dispatch` (Inputs: `mode=native`, `pr_number=1`, `fail_on_invalid=false`)
+- **Commit Tested**: `a53ca3c233c`
+- **Overall Result**: Success (`✓`)
+- **Zero Skipped Jobs**: The lint-commit-message job ran cleanly and completed in 12 seconds.
+
+### Execution Timeline & Step Analysis
+| Step Name | Status | Duration | Runner Image | Step Verification Details |
+|---|---|---|---|---|
+| `Install Node.js` | `success` | 1s | `ubuntu-latest` | Node.js runtime set up via `actions/setup-node@v4` |
+| `Validate first commit message` | `success` | 6s | `ubuntu-latest` | Executed `core-validate-commit@6.0.0` in TAP mode; evaluated PR #1 commit metadata; parsed TAP test checklist into Markdown table on `$GITHUB_STEP_SUMMARY`; logged warning without failing job |
+| `Upload Commit Lint Report Artifact` | `success` | 2s | `ubuntu-latest` | Artifact `commit-lint-report` packaged and uploaded with full raw output and structured JSON |
+
+### Generated Artifacts
+| Artifact Name | Size | Files Included | Purpose |
+|---|---|---|---|
+| `commit-lint-report` | ~2.5 KB | `reports/commit-lint-raw.txt`, `reports/commit-lint.json`, `reports/commit-lint-summary.md` | Full TAP test log, machine-readable validation result object, and formatted checklist markdown |
 
 ---
 
