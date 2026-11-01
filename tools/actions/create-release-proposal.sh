@@ -1,7 +1,7 @@
 #!/bin/sh
 
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-nodejs/node}
-BOT_TOKEN=${BOT_TOKEN:-}
+BOT_TOKEN=${BOT_TOKEN:-${GH_TOKEN:-}}
 
 RELEASE_DATE=$1
 RELEASE_LINE=$2
@@ -43,6 +43,25 @@ TEMP_BODY="$(awk -v MAX_BODY_LENGTH="65534" \
       if ((output_length += length(\$0) + 1) > MAX_BODY_LENGTH) {exit 1;}
       print
     }" "doc/changelogs/CHANGELOG_V${RELEASE_LINE}.md" || echo "…")"
+
+# Handle dry run mode in non-enterprise / fork environments
+if [ "$DRY_RUN" = "true" ]; then
+  echo "Dry run mode active: release prepare completed locally. Skipping remote branch and PR creation."
+  mkdir -p reports
+  cat << EOF > reports/release-proposal-summary.md
+# 📦 Release Proposal Simulation (Dry Run)
+- **Release Line**: v${RELEASE_LINE}.x
+- **Release Date**: ${RELEASE_DATE}
+- **Proposed Commit Title**: ${TITLE}
+- **Local Branch**: ${HEAD_BRANCH}
+- **Base Commit**: ${HEAD_SHA}
+- **Mode**: GitHub-Native Alternative (Dry Run)
+EOF
+  if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+    cat reports/release-proposal-summary.md >> "$GITHUB_STEP_SUMMARY"
+  fi
+  exit 0
+fi
 
 # Create the proposal branch
 gh api \
