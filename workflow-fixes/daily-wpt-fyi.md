@@ -81,7 +81,35 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: `41353708896`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41353708896](https://github.com/sajuptpm/node/actions/runs/41353708896)
+- **Workflow**: `Daily WPT report`
+- **Trigger**: `workflow_dispatch` (inputs: `node_version: "22"`, `mode: "native"`, `dry_run: true`)
+- **Conclusion**: `success` (`✓`)
+- **Total Duration**: 42 seconds
+
+### Execution Timeline
+
+| Job Name | Job ID | Duration | Status | Outcome |
+| :--- | :--- | :--- | :--- | :--- |
+| `Collect Node Versions` | `124989156146` | 2s | `completed` | `success` |
+| `WPT Report (22)` | `124989243336` | 37s | `completed` | `success` |
+
+### Key Step Execution Summary
+1. **Set up Python 3.14**: Completed in 0s (`success`).
+2. **Install Node.js**: Installed Node.js v22.23.4 via `actions/setup-node` (`success`).
+3. **Resolve Checkout Ref**: Identified branch `v22.x-staging` after stripping version prefix (`success`).
+4. **Checkout repository**: Checked out `sajuptpm/node` at `v22.x-staging` (`success`).
+5. **Checkout epochs/daily WPT**: Cloned `web-platform-tests/wpt` at daily epoch (`success`).
+6. **Run WPT and generate report**: Structured JSON report generated at `out/wpt/wptreport.json` (`success`).
+7. **Clone report for upload**: Copied report to `wptreport-v22.23.4.json` (`success`).
+8. **Upload GitHub Actions artifact**: Uploaded artifact `WPT-Report-v22.23.4` (`success`).
+9. **Resolve Upload Mode**: Resolved `native` mode, safely skipping external wpt.fyi API call (`success`).
+10. **Native Mode - Summary Notification**: Emitted structured WPT summary to `$GITHUB_STEP_SUMMARY` (`success`).
+
+### Generated Artifacts
+- **Artifact Name**: `WPT-Report-v22.23.4`
+- **Artifact Content**: `out/wpt/wptreport-v22.23.4.json` (Structured Web Platform Test execution report)
 
 ---
 
