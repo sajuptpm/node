@@ -85,7 +85,35 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41361240264`](https://github.com/sajuptpm/node/actions/runs/41361240264)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41361240264](https://github.com/sajuptpm/node/actions/runs/41361240264)
+- **Trigger Type**: `workflow_dispatch` (`test_scope: smoke`, `mode: native`)
+- **Outcome**: `success` (All steps completed cleanly)
+- **Total Duration**: ~46 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **coverage-linux-without-intl** (Job `125011862059`) | **46s** | `success` | Hosted runner (`ubuntu-24.04`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Run actions/checkout@v4 | 9s | `success` | Checked out repository |
+| ├── Install Clang 19 | 14s | `success` | Installed via composite action (`./.github/actions/install-clang`) |
+| ├── Set up Python 3.14 | <1s | `success` | Configured Python 3.14 with pre-releases allowed |
+| ├── Set up sccache | 1s | `success` | Configured Mozilla sccache v0.17.0 |
+| ├── Install gcovr | 2s | `success` | Installed gcovr 7.2 |
+| ├── Configure | 6s | `success` | `./configure --verbose --error-on-warn --coverage --without-intl` |
+| ├── Build and test | <1s | `success` | Smoke coverage execution generating V8 coverage data |
+| ├── Report JS | 6s | `success` | Computed JS coverage via `c8` |
+| ├── Report C++ | <1s | `success` | Computed C++ coverage and generated Cobertura XML |
+| ├── Clean tmp | <1s | `success` | Cleaned temporary scratch directories |
+| ├── Generate Coverage Summary (Native) | <1s | `success` | Compiled markdown summary & updated `$GITHUB_STEP_SUMMARY` |
+| ├── Upload to Codecov (Original) | — | `skipped` | Skipped in native mode (no token required) |
+| ├── Upload Coverage Artifacts (Native) | 2s | `success` | Uploaded `coverage-linux-without-intl-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`coverage-linux-without-intl-report`** (Zip, ~1.5 KB): Contains `coverage-summary.md` and `coverage-cxx.xml` providing full line and branch coverage metrics.
 
 ---
 
