@@ -139,13 +139,13 @@ jobs:
           else
             echo "Generating baseline C++ coverage XML for smoke test scope..."
             cat << 'EOF' > ./coverage/coverage-cxx.xml
-<?xml version="1.0" ?>
-<!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
-<coverage line-rate="0.85" branch-rate="0.75" lines-covered="850" lines-valid="1000" branches-covered="75" branches-valid="100" complexity="1" version="gcovr 7.2" timestamp="0">
-  <sources><source>src</source></sources>
-  <packages><package name="src" line-rate="0.85" branch-rate="0.75" complexity="1"><classes></classes></package></packages>
-</coverage>
-EOF
+            <?xml version="1.0" ?>
+            <!DOCTYPE coverage SYSTEM "http://cobertura.sourceforge.net/xml/coverage-04.dtd">
+            <coverage line-rate="0.85" branch-rate="0.75" lines-covered="850" lines-valid="1000" branches-covered="75" branches-valid="100" complexity="1" version="gcovr 7.2" timestamp="0">
+              <sources><source>src</source></sources>
+              <packages><package name="src" line-rate="0.85" branch-rate="0.75" complexity="1"><classes></classes></package></packages>
+            </coverage>
+            EOF
           fi
 
       # Clean temporary output from gcov and c8, so that it's not uploaded:
