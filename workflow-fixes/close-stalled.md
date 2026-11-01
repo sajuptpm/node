@@ -72,7 +72,27 @@ No proprietary secrets required (`$GITHUB_TOKEN` is used automatically).
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41358260550`](https://github.com/sajuptpm/node/actions/runs/41358260550)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41358260550](https://github.com/sajuptpm/node/actions/runs/41358260550)
+- **Trigger Type**: `workflow_dispatch` (`dry_run: true`, `mode: native`)
+- **Outcome**: `success` (All job steps completed cleanly)
+- **Total Duration**: ~8 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Process Stalled Issues & PRs** (Job `125002908195`) | **8s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Execution Mode | <1s | `success` | Resolved mode to `native` (`dry_run=true`) |
+| ├── Audit Stalled Issues and PRs | 1s | `success` | Scanned open PRs and issues labeled 'stalled' |
+| ├── Process Stale Items (Dry-Run Mode) | 2s | `success` | `actions/stale@v9` with `debug-only: true` |
+| ├── Process Stale Items (Live Original) | — | `skipped` | Skipped in dry-run mode |
+| ├── Upload Close Stalled Report | 2s | `success` | Uploaded `close-stalled-report` artifact via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`close-stalled-report`** (Zip, ~1.5 KB): Contains `close-stalled-report.md` capturing parameters, scanned PRs and issues, and dry-run execution status.
 
 ---
 
