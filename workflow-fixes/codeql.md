@@ -86,7 +86,32 @@ No proprietary secrets required (`$GITHUB_TOKEN` is used automatically).
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41358840781`](https://github.com/sajuptpm/node/actions/runs/41358840781)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41358840781](https://github.com/sajuptpm/node/actions/runs/41358840781)
+- **Trigger Type**: `workflow_dispatch` (`language: "javascript"`, `smoke_test: true`, `mode: native`)
+- **Outcome**: `success` (All pipeline jobs and steps completed cleanly)
+- **Total Duration**: ~2 minutes 35 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Initialize CodeQL Matrix** (Job `125004636859`) | **3s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Target Languages | <1s | `success` | Evaluated language matrix (`["javascript"]`) |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **Analyze: javascript** (Job `125004655142`) | **2m32s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 2s | `success` | Runner initialization |
+| ├── Checkout repository | 9s | `success` | Cloned repository ref |
+| ├── Initialize CodeQL | 12s | `success` | Initialized CodeQL JS/TS extractor with config |
+| ├── Autobuild | — | `skipped` | Skipped for interpreted language (unneeded) |
+| ├── Perform CodeQL Analysis | 2m4s | `success` | Analyzed JavaScript code & uploaded SARIF |
+| ├── Generate CodeQL Summary Report | <1s | `success` | Formatted Markdown summary table |
+| ├── Upload CodeQL Report Artifact | 1s | `success` | Uploaded `codeql-javascript-report` via v4 |
+| └── Complete job | 2s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`codeql-javascript-report`** (Zip, ~1.5 KB): Contains `codeql-javascript-report.md` capturing analyzed language, config file details, ignored paths, and timestamp.
 
 ---
 
