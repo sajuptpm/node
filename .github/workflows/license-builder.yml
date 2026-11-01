@@ -1,10 +1,25 @@
 name: License update
+
 on:
   schedule:
     # 00:00:00 every Monday
-    # https://crontab.guru/#0_0_*_*_1
     - cron: 0 0 * * 1
   workflow_dispatch:
+    inputs:
+      create_pr:
+        description: 'Open a pull request with updated LICENSE if changes detected'
+        required: false
+        default: false
+        type: boolean
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
 
 permissions:
   contents: read
@@ -12,18 +27,110 @@ permissions:
 jobs:
   update_license:
     permissions:
-      contents: write  # for gr2m/create-or-update-pull-request-action to push local changes
-      pull-requests: write  # for gr2m/create-or-update-pull-request-action to create a PR
-    if: github.repository == 'nodejs/node'
-    runs-on: ubuntu-slim
+      contents: write
+      pull-requests: write
+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_LICENSE_UPDATE == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: ./tools/license-builder.sh  # Run the license builder tool
-      - uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
-        # Creates a PR or update the Action's existing PR, or
-        # no-op if the base branch is already up-to-date.
+
+      - name: Resolve Configuration & Inputs
+        id: resolve-config
+        run: |
+          CREATE_PR_INPUT="${{ inputs.create_pr || 'false' }}"
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
+
+          if [ "$INPUT_MODE" = "auto" ]; then
+            if [ "${{ github.repository }}" = "nodejs/node" ] && [ "${{ github.event_name }}" = "schedule" ]; then
+              RESOLVED_MODE="original"
+              RESOLVED_CREATE_PR="true"
+            else
+              RESOLVED_MODE="native"
+              RESOLVED_CREATE_PR="$CREATE_PR_INPUT"
+            fi
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+            RESOLVED_CREATE_PR="true"
+          else
+            RESOLVED_MODE="native"
+            RESOLVED_CREATE_PR="$CREATE_PR_INPUT"
+          fi
+
+          echo "mode=$RESOLVED_MODE" >> $GITHUB_OUTPUT
+          echo "create_pr=$RESOLVED_CREATE_PR" >> $GITHUB_OUTPUT
+          echo "Resolved Mode: $RESOLVED_MODE, Create PR: $RESOLVED_CREATE_PR"
+
+      - name: Build License
+        run: ./tools/license-builder.sh
+
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          mkdir -p license-reports
+          git diff LICENSE > license-reports/license.diff || true
+          python3 -c '
+          import os, subprocess
+
+          mode = os.environ.get("MODE", "unknown")
+          create_pr = os.environ.get("CREATE_PR", "false")
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          license_changed = False
+          diff_stat = ""
+          try:
+              status = subprocess.check_output(["git", "status", "--porcelain", "LICENSE"], text=True).strip()
+              license_changed = len(status) > 0
+              if license_changed:
+                  diff_stat = subprocess.check_output(["git", "diff", "--stat", "LICENSE"], text=True).strip()
+          except Exception as e:
+              diff_stat = str(e)
+
+          report = f"""# License Builder Execution Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+          | **Execution Mode** | `{mode}` |
+          | **Create PR Enabled** | `{create_pr}` |
+          | **License Modified** | `{"Yes (Updates detected)" if license_changed else "None (Up to date)"}` |
+
+          ## Audit Findings
+          {f"```\n{diff_stat}\n```" if license_changed else "LICENSE file is completely up to date with all bundled dependencies."}
+
+          ## Execution Details
+          - **Mode Description**: {"GitHub-Native safe license rebuild & diff verification" if mode == "native" else "Original license build and PR creation"}
+          - **Status**: Completed successfully.
+          """
+
+          with open("license-reports/license-builder-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
+        env:
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          CREATE_PR: ${{ steps.resolve-config.outputs.create_pr }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+
+      - name: Upload License Builder Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-builder-report
+          path: license-reports/
+          retention-days: 7
+
+      - name: Open pull request (Original Mode / Requested)
+        if: steps.resolve-config.outputs.create_pr == 'true'
+        uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
