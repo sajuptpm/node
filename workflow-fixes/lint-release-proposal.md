@@ -69,7 +69,38 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Run Identification
+- **Run ID**: [`41364482088`](https://github.com/sajuptpm/node/actions/runs/41364482088)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41364482088](https://github.com/sajuptpm/node/actions/runs/41364482088)
+- **Workflow**: Linters (release proposals) (`.github/workflows/lint-release-proposal.yml`)
+- **Trigger**: `workflow_dispatch`
+- **Inputs**: `test_scope: smoke`, `mode: native`
+- **Overall Status**: `success` (`✓`)
+- **Runner Image**: `ubuntu-latest`
+- **Total Duration**: 15s
+
+### Job Execution Timeline
+| Job Name | Step Name | Status | Duration |
+| :--- | :--- | :--- | :--- |
+| `lint-release-commit` | Set up job | Completed | 3s |
+| `lint-release-commit` | Run actions/checkout@v4 | Completed | 3s |
+| `lint-release-commit` | Use Node.js lts/* | Completed | 2s |
+| `lint-release-commit` | Resolve Execution Mode & Scope | Completed | 1s |
+| `lint-release-commit` | Lint release commit title format | Completed | 1s |
+| `lint-release-commit` | Lint release commit message trailers | Completed | 1s |
+| `lint-release-commit` | Verify it's release-ready | Completed | 1s |
+| `lint-release-commit` | Lint release commit content | Completed | 1s |
+| `lint-release-commit` | Validate CHANGELOG | Completed | 1s |
+| `lint-release-commit` | Generate Summary Report | Completed | 1s |
+| `lint-release-commit` | Upload Release Proposal Report | Completed | 2s |
+| `lint-release-commit` | Post Use Node.js lts/* | Completed | 0s |
+| `lint-release-commit` | Post Run actions/checkout@v4 | Completed | 1s |
+| `lint-release-commit` | Complete job | Completed | 0s |
+
+### Generated Artifacts
+| Artifact Name | Size | Description |
+| :--- | :--- | :--- |
+| `lint-release-proposal-report` | ~1.4 KB | Release proposal linter summary report with Node version parsing and format verification |
 
 ---
 
