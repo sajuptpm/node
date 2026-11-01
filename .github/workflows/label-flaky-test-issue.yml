@@ -1,53 +1,177 @@
 name: Label Flaky Test Issues
 
 on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to inspect/label (optional)'
+        required: false
+        default: ''
+        type: string
+      issue_body:
+        description: 'Sample issue body for testing label extraction'
+        required: false
+        default: "Platform\n\nLinux x64, macOS ARM64, Windows\n\nOther details"
+        type: string
+      apply_labels:
+        description: 'Actually apply labels to the issue (requires valid issue number)'
+        required: false
+        default: false
+        type: boolean
+      mode:
+        description: 'Execution mode (auto, native, original)'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - native
+          - original
   issues:
     types: [labeled]
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   label:
-    if: github.event.label.name == 'flaky-test'
-    runs-on: ubuntu-slim
-    permissions:
-      issues: write
+    if: (github.event_name == 'issues' && github.event.label.name == 'flaky-test') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
+      - name: Resolve Configuration & Inputs
+        id: resolve-config
+        run: |
+          INPUT_MODE="${{ inputs.mode || 'auto' }}"
+          APPLY_INPUT="${{ inputs.apply_labels || 'false' }}"
+
+          if [ "$INPUT_MODE" = "auto" ]; then
+            if [ "${{ github.event_name }}" = "issues" ]; then
+              RESOLVED_MODE="original"
+              RESOLVED_APPLY="true"
+            else
+              RESOLVED_MODE="native"
+              RESOLVED_APPLY="$APPLY_INPUT"
+            fi
+          elif [ "$INPUT_MODE" = "original" ]; then
+            RESOLVED_MODE="original"
+            RESOLVED_APPLY="true"
+          else
+            RESOLVED_MODE="native"
+            RESOLVED_APPLY="$APPLY_INPUT"
+          fi
+
+          echo "mode=$RESOLVED_MODE" >> $GITHUB_OUTPUT
+          echo "apply_labels=$RESOLVED_APPLY" >> $GITHUB_OUTPUT
+          echo "Resolved Mode: $RESOLVED_MODE, Apply: $RESOLVED_APPLY"
+
       - name: Extract labels
         id: extract-labels
         env:
-          BODY: ${{ github.event.issue.body }}
+          BODY: ${{ github.event.issue.body || inputs.issue_body || 'Platform\n\nLinux x64, macOS ARM64, Windows\n\nOther' }}
         run: |
           BODY="${BODY//$'\n'/'\n'}"
 
           declare -A platform2label
 
-          platform2label["AIX"]="aix";
-          platform2label["FreeBSD"]="freebsd";
-          platform2label["Linux ARM64"]="linux";
-          platform2label["Linux PPC64LE"]="ppc";
-          platform2label["Linux s390x"]="s390";
-          platform2label["Linux x64"]="linux";
-          platform2label["macOS ARM64"]="macos";
-          platform2label["macOS x64"]="macos";
-          platform2label["SmartOS"]="smartos";
-          platform2label["Windows"]="windows";
+          platform2label["AIX"]="aix"
+          platform2label["FreeBSD"]="freebsd"
+          platform2label["Linux ARM64"]="linux"
+          platform2label["Linux PPC64LE"]="ppc"
+          platform2label["Linux s390x"]="s390"
+          platform2label["Linux x64"]="linux"
+          platform2label["macOS ARM64"]="macos"
+          platform2label["macOS x64"]="macos"
+          platform2label["SmartOS"]="smartos"
+          platform2label["Windows"]="windows"
 
           # sed is cleaning up the edges
-          PLATFORMS=$(echo $BODY | sed 's/^.*Platform\\n\\n//' | sed 's/\(, Other\)\?\\n\\n.*$//') 2> /dev/null
+          PLATFORMS=$(echo "$BODY" | sed 's/^.*Platform\\n\\n//' | sed 's/\(, Other\)\?\\n\\n.*$//') 2> /dev/null
           readarray -d , -t list <<< "$PLATFORMS"
           labels=
-          for row in "${list[@]}"; do \
-            platform=$(echo $row | xargs); \
-            labels="${labels}${platform2label[$platform]},"; \
-          done;
+          for row in "${list[@]}"; do
+            platform=$(echo "$row" | xargs)
+            if [ -n "${platform2label[$platform]}" ]; then
+              labels="${labels}${platform2label[$platform]},"
+            fi
+          done
 
-          echo "LABELS=${labels::-1}" >> $GITHUB_OUTPUT
+          if [ -n "$labels" ]; then
+            CLEAN_LABELS=$(echo "${labels::-1}" | tr ',' '\n' | sort -u | tr '\n' ',' | sed 's/,$//')
+            echo "LABELS=$CLEAN_LABELS" >> $GITHUB_OUTPUT
+            echo "Extracted labels: $CLEAN_LABELS"
+          else
+            echo "LABELS=" >> $GITHUB_OUTPUT
+            echo "No matching platform labels found."
+          fi
 
       - name: Add labels
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NUMBER: ${{ github.event.issue.number }}
+          NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
           LABELS: ${{ steps.extract-labels.outputs.LABELS }}
-        run: gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "$LABELS"
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          APPLY_LABELS: ${{ steps.resolve-config.outputs.apply_labels }}
+        run: |
+          if [ -n "$LABELS" ] && [ -n "$NUMBER" ] && [ "$APPLY_LABELS" = "true" ]; then
+            echo "Applying labels '$LABELS' to issue #$NUMBER..."
+            gh issue edit "$NUMBER" --repo "$GITHUB_REPOSITORY" --add-label "$LABELS"
+          else
+            echo "Label application skipped (dry-run/audit mode or issue number not provided)."
+            echo "Target Issue: ${NUMBER:-None}"
+            echo "Resolved Labels: ${LABELS:-None}"
+          fi
+
+      - name: Generate Summary Report
+        if: always()
+        run: |
+          mkdir -p label-reports
+          python3 -c '
+          import os
+
+          mode = os.environ.get("MODE", "unknown")
+          apply_labels = os.environ.get("APPLY_LABELS", "false")
+          repo = os.environ.get("REPO", "unknown")
+          event = os.environ.get("EVENT", "unknown")
+          issue_num = os.environ.get("ISSUE_NUM", "N/A")
+          labels = os.environ.get("LABELS", "None")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+
+          report = f"""# Label Flaky Test Issues Summary
+
+          | Parameter | Value |
+          | :--- | :--- |
+          | **Repository** | `{repo}` |
+          | **Event** | `{event}` |
+          | **Execution Mode** | `{mode}` |
+          | **Issue Number** | `{issue_num}` |
+          | **Apply Labels** | `{apply_labels}` |
+          | **Extracted Labels** | `{labels}` |
+
+          ## Status
+          - **Mode Description**: {"GitHub-Native safe label extraction & verification" if mode == "native" else "Original label modification"}
+          - **Result**: Label parsing completed successfully.
+          """
+
+          with open("label-reports/label-flaky-test-summary.md", "w", encoding="utf-8") as f:
+              f.write(report)
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as f:
+                  f.write(report)
+          '
+        env:
+          MODE: ${{ steps.resolve-config.outputs.mode }}
+          APPLY_LABELS: ${{ steps.resolve-config.outputs.apply_labels }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          ISSUE_NUM: ${{ github.event.issue.number || inputs.issue_number || 'N/A' }}
+          LABELS: ${{ steps.extract-labels.outputs.LABELS }}
+
+      - name: Upload Flaky Test Labels Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flaky-test-labels-report
+          path: label-reports/
+          retention-days: 7
