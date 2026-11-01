@@ -90,7 +90,42 @@ No proprietary secrets required (`$GITHUB_TOKEN` is used automatically).
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41359301241`](https://github.com/sajuptpm/node/actions/runs/41359301241)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41359301241](https://github.com/sajuptpm/node/actions/runs/41359301241)
+- **Trigger Type**: `workflow_dispatch` (`label: all`, `target_number: 1`, `dry_run: true`, `mode: native`)
+- **Outcome**: `success` (All 3 jobs completed cleanly in parallel)
+- **Total Duration**: ~10 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Stalled Label Comment** (Job `125006025823`) | **6s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Target Context | <1s | `success` | Resolved context: Issue/PR #1 |
+| ├── Post Stalled Comment (Live Original) | — | `skipped` | Skipped in dry-run mode |
+| ├── Simulate Stalled Comment (Native Mode) | <1s | `success` | Formatted warning message & added to summary |
+| ├── Upload Stalled Comment Report | 2s | `success` | Uploaded `stale-comment-report` artifact |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **Notable Change Label Comment** (Job `125006025905`) | **5s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Target Context | <1s | `success` | Resolved context: Issue/PR #1 |
+| ├── Post Notable Change Comment (Live Original) | — | `skipped` | Skipped in dry-run mode |
+| ├── Simulate Notable Change Comment (Native Mode) | <1s | `success` | Formatted guidance & added to summary |
+| ├── Upload Notable Change Report | 2s | `success` | Uploaded `notable-change-report` artifact |
+| └── Complete job | <1s | `success` | Clean teardown |
+| **Fast-Track Label Comment** (Job `125006025976`) | **3s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Target Context | <1s | `success` | Resolved context: Issue/PR #1 |
+| ├── Post Fast-Track Comment (Live Original) | — | `skipped` | Skipped in dry-run mode |
+| ├── Simulate Fast-Track Comment (Native Mode) | <1s | `success` | Formatted policy & added to summary |
+| ├── Upload Fast-Track Report | 1s | `success` | Uploaded `fast-track-report` artifact |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`stale-comment-report`** (Zip, ~1.5 KB): Contains markdown report of simulated comment for the stalled workflow.
+- **`notable-change-report`** (Zip, ~1.5 KB): Contains markdown report of simulated comment for notable changes.
+- **`fast-track-report`** (Zip, ~1.5 KB): Contains markdown report of simulated comment for fast-track approvals.
 
 ---
 
