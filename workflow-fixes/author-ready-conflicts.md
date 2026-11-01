@@ -80,7 +80,25 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41356385904`](https://github.com/sajuptpm/node/actions/runs/41356385904)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41356385904](https://github.com/sajuptpm/node/actions/runs/41356385904)
+- **Trigger Type**: `workflow_dispatch` (`mode: native`, `dry_run: true`, `pr_number: 1`)
+- **Outcome**: `success` (Completed cleanly)
+- **Total Duration**: 7 seconds
+
+### Execution Timeline Table
+
+| Job / Step | Duration | Status | Notes |
+| :--- | :--- | :--- | :--- |
+| **Remove author ready** (Job `124997220891`) | **7s** | `success` | Hosted runner (`ubuntu-latest`) |
+| ├── Set up job | 1s | `success` | Runner initialization |
+| ├── Resolve Execution Mode | <1s | `success` | Resolved mode `native`, `dry_run=true` |
+| ├── Scan and Process Conflicting PRs | 1s | `success` | Scanned PR #1, generated summary table |
+| ├── Upload Conflicts Audit Artifact | 2s | `success` | Uploaded `conflicts-audit-report` via v4 |
+| └── Complete job | <1s | `success` | Clean teardown |
+
+### Generated Artifacts
+- **`conflicts-audit-report`** (Zip, ~2 KB): Contains `conflicts-audit-report.md` capturing audit logs, target PR status, and unlabel actions.
 
 ---
 
