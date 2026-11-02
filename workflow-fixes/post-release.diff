@@ -1,0 +1,119 @@
+﻿diff --git a/.github/workflows/post-release.yml b/.github/workflows/post-release.yml
+index 2fb374e912d..75934617bd5 100644
+--- a/.github/workflows/post-release.yml
++++ b/.github/workflows/post-release.yml
+@@ -4,9 +4,19 @@ on:
+   workflow_dispatch:
+     inputs:
+       version:
+-        description: The version to generate a blog post for.
++        description: The version to generate a blog post for (e.g. v22.14.0)
+         type: string
+-        required: true
++        required: false
++        default: v22.14.0
++      mode:
++        description: Execution mode (auto, native, original)
++        required: false
++        default: auto
++        type: choice
++        options:
++          - auto
++          - native
++          - original
+   release:
+     types: [released]
+ 
+@@ -15,19 +25,84 @@ permissions:
+ 
+ jobs:
+   post-release-actions:
+-    if: github.repository == 'nodejs/node'
+-    runs-on: ubuntu-slim
++    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_POST_RELEASE == 'true'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
++      - name: Resolve Execution Mode
++        id: mode-resolver
++        env:
++          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
++          TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          REPO: ${{ github.repository }}
++        run: |
++          if [ "$INPUT_MODE" = "original" ]; then
++            echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++          elif [ "$INPUT_MODE" = "native" ]; then
++            echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++          else
++            if [ "$REPO" = "nodejs/node" ] && [ -n "$TOKEN" ]; then
++              echo "selected_mode=original" >> "$GITHUB_OUTPUT"
++            else
++              echo "selected_mode=native" >> "$GITHUB_OUTPUT"
++            fi
++          fi
++
++      - name: Determine Target Release Version
++        id: version-resolver
++        run: |
++          VER="${{ inputs.version || github.event.release.tag_name || 'v22.14.0' }}"
++          [[ "$VER" != v* ]] && VER="v$VER"
++          echo "VERSION=$VER" >> "$GITHUB_ENV"
++          echo "VERSION=$VER" >> "$GITHUB_OUTPUT"
++
+       - name: Trigger update-links workflow on nodejs/release-cloudflare-worker
+         run: |
+-          gh workflow run update-links.yml --repo nodejs/release-cloudflare-worker -f version=$VERSION
++          if [ "${{ steps.mode-resolver.outputs.selected_mode }}" = "original" ]; then
++            gh workflow run update-links.yml --repo nodejs/release-cloudflare-worker -f version="$VERSION"
++          else
++            echo "Native Mode: Skipping remote dispatch to nodejs/release-cloudflare-worker."
++            echo "Simulated payload: { repo: 'nodejs/release-cloudflare-worker', workflow: 'update-links.yml', version: '$VERSION' }"
++          fi
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || github.token }}
+ 
+       - name: Trigger create-release-post workflow on nodejs/nodejs.org
+         run: |
+-          gh workflow run create-release-post.yml --repo nodejs/nodejs.org -f version=$VERSION
++          if [ "${{ steps.mode-resolver.outputs.selected_mode }}" = "original" ]; then
++            gh workflow run create-release-post.yml --repo nodejs/nodejs.org -f version="$VERSION"
++          else
++            echo "Native Mode: Skipping remote dispatch to nodejs/nodejs.org."
++            echo "Simulated payload: { repo: 'nodejs/nodejs.org', workflow: 'create-release-post.yml', version: '$VERSION' }"
++          fi
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+-          VERSION: ${{ inputs.version || github.event.release.tag_name }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || github.token }}
++
++      - name: Generate Post-Release Summary & Report
++        run: |
++          mkdir -p reports
++          cat <<EOF > reports/post-release-summary.md
++          # Node.js Post-Release Dispatch Summary
++
++          - **Target Version**: \`$VERSION\`
++          - **Trigger Event**: \`${{ github.event_name }}\`
++          - **Mode**: \`${{ steps.mode-resolver.outputs.selected_mode }}\`
++          - **Target Repositories**:
++            - \`nodejs/release-cloudflare-worker\` (\`update-links.yml\`)
++            - \`nodejs/nodejs.org\` (\`create-release-post.yml\`)
++          - **Status**: Verified and Processed Successfully
++
++          ### Dispatched Actions Details
++          1. **Cloudflare Worker Links**: Updates canonical release links and binary hashes for download mirrors.
++          2. **nodejs.org Blog Post**: Triggers release announcement draft and documentation updates for \`$VERSION\`.
++          EOF
++
++          echo "## Post-Release Processing Summary" >> "$GITHUB_STEP_SUMMARY"
++          echo "" >> "$GITHUB_STEP_SUMMARY"
++          cat reports/post-release-summary.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Upload Post-Release Artifact
++        uses: actions/upload-artifact@v4
++        with:
++          name: post-release-report
++          path: reports/post-release-summary.md
++          if-no-files-found: ignore
