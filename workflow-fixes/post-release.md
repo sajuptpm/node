@@ -81,7 +81,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41366807517`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41366807517](https://github.com/sajuptpm/node/actions/runs/41366807517)
+- **Trigger**: `workflow_dispatch` (inputs: `version: v22.14.0`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 7 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `post-release-actions` | `success` (`✓`) | 7s | `ubuntu-latest` | Resolved mode to native, validated target release `v22.14.0`, simulated cross-repository dispatches, output summary table, and uploaded artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `post-release-report` | 496 bytes | `reports/post-release-summary.md` (complete dispatch parameters and target repository records) |
 
 ---
 
