@@ -84,7 +84,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41365922655`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41365922655](https://github.com/sajuptpm/node/actions/runs/41365922655)
+- **Trigger**: `workflow_dispatch` (inputs: `post_comment: false`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 7 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `Aggregate results` | `success` (`✓`) | 7s | `ubuntu-latest` | Successfully processed requisites across 4 architectures, rendered summary table & changelog into `$GITHUB_STEP_SUMMARY`, and generated `nix-changes-report` artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `nix-changes-report` | 914 bytes | `requisites.diff`, `requisites-before.list`, `requisites-after.list` |
 
 ---
 
