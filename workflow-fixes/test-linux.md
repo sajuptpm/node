@@ -72,7 +72,32 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41369372741`](https://github.com/sajuptpm/node/actions/runs/41369372741)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41369372741](https://github.com/sajuptpm/node/actions/runs/41369372741)
+- **Trigger Type**: `workflow_dispatch` (`test_scope=smoke`, `mode=native`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `15s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Run actions/checkout@v4` | Completed | 2s | Checked out repository root at ref `main` |
+| `Install Clang 19` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Install Rust 1.88` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up Python 3.14` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up sccache` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Build (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Test (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Ensure running tests did not cause any change in the tree` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Re-run test in a folder whose name contains unusual chars` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Native Linux Verification` | Completed | 4s | Audited kernel, Python & Node runtimes, verified `tools/test.py` and `configure.py`, and verified unusual path execution |
+| `Upload Linux Test Report Artifact` | Completed | 2s | Uploaded `reports/linux-test-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `test-linux-report`
+  - Contents: `reports/linux-test-report.md` (detailed markdown report containing Linux OS/kernel, Python runtime, `tools/test.py` and `configure.py` validation, and unusual path test status)
 
 ---
 
