@@ -186,6 +186,8 @@ compile_commands.json
 # === Workflow Fixes ===
 workflow-fixes/*.env
 !workflow-fixes/*.env.example
+workflow-fixes/downloaded-artifacts/
+workflow-fixes/test-suite-execution-report.md
 
 # === Dev Container rules ===
 # Only track the shared base devcontainer.json; ignore everything else under .devcontainer
