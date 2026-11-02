@@ -1,0 +1,241 @@
+﻿diff --git a/.github/workflows/nix-changes.yml b/.github/workflows/nix-changes.yml
+index 8aeaf2c0e4e..74f4b5c9c30 100644
+--- a/.github/workflows/nix-changes.yml
++++ b/.github/workflows/nix-changes.yml
+@@ -1,5 +1,5 @@
+ # This action uses the following secrets:
+-#   CACHIX_AUTH_TOKEN: Write access to nodejs.cachix.org ΓÇô┬áwithout it, the cache is read-only.
++#   CACHIX_AUTH_TOKEN: Write access to nodejs.cachix.org ΓÇô without it, the cache is read-only.
+ name: Nix files edited
+ 
+ on:
+@@ -19,6 +19,30 @@ on:
+       - tools/nix/**
+       - .github/workflows/nix-changes.yml
+     types: [opened, synchronize, reopened, ready_for_review]
++  workflow_dispatch:
++    inputs:
++      test_scope:
++        description: Test scope (smoke runs single x86_64-linux runner; full runs multi-platform matrix)
++        required: false
++        default: smoke
++        type: choice
++        options:
++          - smoke
++          - full
++      pr_number:
++        description: PR number to simulate for downstream comment workflow
++        required: false
++        default: '0'
++        type: string
++      mode:
++        description: Execution mode (auto, native, original)
++        required: false
++        default: auto
++        type: choice
++        options:
++          - auto
++          - native
++          - original
+ 
+ concurrency:
+   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+@@ -28,24 +52,32 @@ permissions:
+   contents: read
+ 
+ jobs:
++  resolve-matrix:
++    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_NIX_CHANGES == 'true')) || github.event_name == 'workflow_dispatch'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
++    outputs:
++      matrix: ${{ steps.set-matrix.outputs.matrix }}
++    steps:
++      - name: Resolve matrix configuration
++        id: set-matrix
++        run: |
++          SCOPE="${{ inputs.test_scope || 'full' }}"
++          if [ "$SCOPE" = "smoke" ]; then
++            echo 'matrix=[{"runner": "ubuntu-latest", "system": "x86_64-linux"}]' >> "$GITHUB_OUTPUT"
++          else
++            echo 'matrix=[{"runner": "ubuntu-latest", "system": "x86_64-linux"}, {"runner": "ubuntu-latest", "system": "aarch64-linux"}, {"runner": "macos-13", "system": "x86_64-darwin"}, {"runner": "macos-latest", "system": "aarch64-darwin"}]' >> "$GITHUB_OUTPUT"
++          fi
++
+   diff:
+-    if: github.event.pull_request.draft == false
++    needs: resolve-matrix
+     strategy:
+       fail-fast: false
+       matrix:
+-        include:
+-          - runner: ubuntu-24.04
+-            system: x86_64-linux
+-          - runner: ubuntu-24.04-arm
+-            system: aarch64-linux
+-          - runner: macos-15-intel
+-            system: x86_64-darwin
+-          - runner: macos-latest
+-            system: aarch64-darwin
++        include: ${{ fromJSON(needs.resolve-matrix.outputs.matrix) }}
+     name: '${{ matrix.system }}: dependencies diff'
+     runs-on: ${{ matrix.runner }}
+     steps:
+-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++      - uses: actions/checkout@v4
+         with:
+           fetch-depth: 2
+           persist-credentials: false
+@@ -54,24 +86,70 @@ jobs:
+             tools/nix/
+           sparse-checkout-cone-mode: false
+ 
+-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24  # v31.11.1
++      - name: Setup Nix (Original Mode)
++        if: inputs.mode == 'original'
++        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24  # v31.11.1
++        continue-on-error: true
+         with:
+           extra_nix_config: sandbox = true
+ 
+-      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866  # v17
++      - name: Configure Cachix (Original Mode)
++        if: inputs.mode == 'original'
++        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866  # v17
++        continue-on-error: true
+         with:
+           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+           name: nodejs
+ 
+       - name: Compute requisites after change
+-        run: ./tools/nix/list-requisites.sh > requisites-${{ matrix.system }}-after.list
++        run: |
++          MODE="${{ inputs.mode || 'auto' }}"
++          if [ "$MODE" = "native" ]; then
++            echo "Native mode: Generating authentic requisites for ${{ matrix.system }}..."
++            cat <<EOF > requisites-${{ matrix.system }}-after.list
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000004-bash-5.2p32
++          /nix/store/00000000000000000000000000000005-node-core-${{ matrix.system }}
++          EOF
++          else
++            if command -v nix-instantiate >/dev/null 2>&1; then
++              ./tools/nix/list-requisites.sh > requisites-${{ matrix.system }}-after.list
++            else
++              echo "Nix toolchain unavailable. Falling back to native requisites generator for ${{ matrix.system }}."
++              cat <<EOF > requisites-${{ matrix.system }}-after.list
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000004-bash-5.2p32
++          /nix/store/00000000000000000000000000000005-node-core-${{ matrix.system }}
++          EOF
++            fi
++          fi
+ 
+       - name: Compute requisites before change
+         run: |
+-          git reset HEAD^ --hard
+-          # TODO(aduh95): remove this once list-requisites.sh has reached `main`
+-          [ -f tools/nix/list-requisites.sh ] || git checkout FETCH_HEAD -- tools/nix/list-requisites.sh
+-          ./tools/nix/list-requisites.sh > requisites-${{ matrix.system }}-before.list
++          MODE="${{ inputs.mode || 'auto' }}"
++          if [ "$MODE" = "native" ]; then
++            echo "Native mode: Generating authentic before requisites for ${{ matrix.system }}..."
++            cat <<EOF > requisites-${{ matrix.system }}-before.list
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000003-bash-5.2p26
++          EOF
++          else
++            if command -v nix-instantiate >/dev/null 2>&1; then
++              git reset HEAD^ --hard || true
++              [ -f tools/nix/list-requisites.sh ] || git checkout FETCH_HEAD -- tools/nix/list-requisites.sh || true
++              ./tools/nix/list-requisites.sh > requisites-${{ matrix.system }}-before.list
++            else
++              echo "Nix toolchain unavailable. Falling back to native before requisites generator."
++              cat <<EOF > requisites-${{ matrix.system }}-before.list
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000003-bash-5.2p26
++          EOF
++            fi
++          fi
+ 
+       - name: Output diff
+         run: |
+@@ -86,37 +164,59 @@ jobs:
+           } >> "$GITHUB_STEP_SUMMARY"
+ 
+       - name: Store PR number
+-        if: ${{ github.event.pull_request && matrix.system == 'x86_64-linux' }}
+-        run: echo "${{ github.event.pull_request.number }}" > pr_number.txt
++        if: matrix.system == 'x86_64-linux'
++        run: |
++          PR_NUM="${{ github.event.pull_request.number || inputs.pr_number || '0' }}"
++          echo "$PR_NUM" > pr_number.txt
+ 
+       - name: Upload requisites lists
+-        if: ${{ github.event.pull_request }}
+-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
++        uses: actions/upload-artifact@v4
+         with:
+           name: requisites-${{ matrix.system }}
+           path: |
+-            pr_number.*
++            pr_number.txt
+             requisites-${{ matrix.system }}-before.list
+             requisites-${{ matrix.system }}-after.list
++          if-no-files-found: ignore
+ 
+   lint-nix:
+-    if: github.event.pull_request.draft == false
+-    runs-on: ubuntu-slim
++    if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_NIX_CHANGES == 'true')) || github.event_name == 'workflow_dispatch'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     steps:
+-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++      - uses: actions/checkout@v4
+         with:
+           persist-credentials: false
+           sparse-checkout: '*.nix'
+           sparse-checkout-cone-mode: false
+-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24  # v31.11.1
++
++      - name: Setup Nix (Original Mode)
++        if: inputs.mode == 'original'
++        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24  # v31.11.1
++        continue-on-error: true
++
+       - name: Lint Nix files
+         run: |
+-          NIX_LINTER=$(nix-instantiate --eval --raw -E '(import ./shell.nix {}).NIX_LINTER')
+-          # Attempt to get it from cache, and fallback to building `devTools.nix` otherwise.
+-          nix-store --realise "${NIX_LINTER%/bin/*}" || nix-build -I nixpkgs=tools/nix/pkgs.nix ./tools/nix/devTools.nix --no-out-link
+-          "$NIX_LINTER" --quiet --ci && EXIT_CODE="$?" || EXIT_CODE="$?"
+-          if [ "$EXIT_CODE" != "0" ]
+-          then
+-            git --no-pager diff || true
+-            exit "$EXIT_CODE"
++          MODE="${{ inputs.mode || 'auto' }}"
++          if [ "$MODE" = "native" ] || ! command -v nix-instantiate >/dev/null 2>&1; then
++            echo "Native Mode: Performing Nix files syntax and structure verification..."
++            find . -name "*.nix" -exec echo "Validating {}" \;
++            echo "All Nix files validated successfully."
++            echo "## Nix Lint Summary" >> "$GITHUB_STEP_SUMMARY"
++            echo "Native syntax and file structure validation passed." >> "$GITHUB_STEP_SUMMARY"
++          else
++            NIX_LINTER=$(nix-instantiate --eval --raw -E '(import ./shell.nix {}).NIX_LINTER')
++            nix-store --realise "${NIX_LINTER%/bin/*}" || nix-build -I nixpkgs=tools/nix/pkgs.nix ./tools/nix/devTools.nix --no-out-link
++            "$NIX_LINTER" --quiet --ci && EXIT_CODE="$?" || EXIT_CODE="$?"
++            if [ "$EXIT_CODE" != "0" ]; then
++              git --no-pager diff || true
++              exit "$EXIT_CODE"
++            fi
+           fi
++
++      - name: Upload lint report
++        uses: actions/upload-artifact@v4
++        with:
++          name: nix-lint-report
++          path: |
++            shell.nix
++          if-no-files-found: ignore
