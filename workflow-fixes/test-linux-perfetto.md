@@ -77,7 +77,31 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41368539361`](https://github.com/sajuptpm/node/actions/runs/41368539361)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41368539361](https://github.com/sajuptpm/node/actions/runs/41368539361)
+- **Trigger Type**: `workflow_dispatch` (`test_scope=smoke`, `mode=native`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `15s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Run actions/checkout@v4` | Completed | 2s | Checked out repository root at ref `main` |
+| `Install Clang 19` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Install Rust 1.88` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up Python 3.14` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up sccache` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Build (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Get trace_processor (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Test (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Native Perfetto Verification` | Completed | 4s | Audited `deps/perfetto/VERSION` (`58.2`), verified `configure.py --with-perfetto`, and checked Node.js trace events |
+| `Upload Perfetto Report Artifact` | Completed | 2s | Uploaded `reports/perfetto-test-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `perfetto-test-report`
+  - Contents: `reports/perfetto-test-report.md` (detailed markdown report containing Perfetto version, trace events status, and configure flags)
 
 ---
 
