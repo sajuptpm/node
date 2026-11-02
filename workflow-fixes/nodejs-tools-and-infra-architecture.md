@@ -1,61 +1,81 @@
-# Node.js Architecture: Infrastructure, GitHub Tools & 3P Ecosystem
+# Node.js Architecture: Infrastructure, GitHub Tools & 3P Ecosystem (Original Upstream Before Changes)
 
-This document provides a comprehensive mapping of the **Infrastructure**, **GitHub-Native Tools**, and **Third-Party (3P) Tools & Libraries** powering the Node.js open-source project and its modernized CI/CD pipelines, directly mirroring the architectural model used in modern cloud-native systems.
-
----
-
-## 1. INFRASTRUCTURE (`INFRA`)
-
-| Infra | Purpose | Role in Node.js Project |
-| :--- | :--- | :--- |
-| **GitHub-Hosted Runners (Linux, macOS, Windows)** | Standard CI/CD & Matrix Builds | Executes multi-platform compilation, unit tests, linters, and documentation builds on `ubuntu-latest`, `windows-2025`, and `macos-15`. |
-| **Dedicated Multi-Arch Build Farm (`ci.nodejs.org` Jenkins)** | Exotic Architecture Testing | Upstream OpenJS Foundation cluster of 100+ bare-metal servers testing IBM AIX, IBM z/OS (s390x), PowerPC (ppc64le), and SmartOS. |
-| **Self-Hosted ARM64 Runners / Managed ARM64** | Native AArch64 Testing & Packaging | Compiles native 64-bit ARM binaries and validates V8 JIT code generation directly on ARM hardware (AWS Graviton, Apple Silicon, Ampere). |
-| **Developer Workstation / Developer VM** | Development & Debugging | Local engineer environments for source code authoring, local `./configure && make -j` compilation, and C++/JS debugging. |
-| **Benchmarking Bare-Metal Servers** | Performance & Latency Testing | Dedicated, quiet hardware machines without shared virtualization noise for running micro-benchmarks against V8, HTTP, and Streams. |
-| **Public Internet & DNS Test Infrastructure** | Real-World Network Testing | Public DNS root servers and live HTTPS endpoints used by `test-internet.yml` to validate live socket and TLS handshakes. |
+> [!NOTE]
+> This inventory documents the **exact Infrastructure, GitHub-Native Tools, and Third-Party (3P) Tools** used in the original upstream Node.js CI/CD pipelines **BEFORE any code changes or refactoring**. All entries are verified against the upstream commit `fe40b317efe`.
 
 ---
 
-## 2. GITHUB TOOLS (`GITHUB TOOLS`)
+## 1. ⚙️ INFRASTRUCTURE (`INFRA`)
 
-| Tool | Purpose | Role in Node.js Project |
+| Infra | Purpose | Evidence in Original Workflow (Before Changes) |
 | :--- | :--- | :--- |
-| **Public GitHub Repository** | Source Control & Issue Triage | Hosts the canonical git repository, issue tracker, pull requests, and collaborator discussions. |
-| **GitHub Actions** | CI/CD & Automated Release Pipelines | Orchestrates all 45 automated workflows for linting, compilation, testing, security scanning, and release staging. |
-| **GitHub Releases** | Release Management & Asset Distribution | Distributes official production binaries, source archives (`node-vX.Y.Z.tar.gz`), release notes, and SHA256 checksums. |
-| **GitHub Container Registry (GHCR)** | Container & Package Registry | Stores and distributes official development container base images, devcontainers, and release containers. |
-| **Dependabot** | Dependency Management (Vulnerabilities) | Automated monitoring and bump pull requests for GitHub Actions dependencies and development tools. |
-| **CodeQL** | Security Scanning (SAST Vulnerabilities) | Semantic static code analysis detecting Common Weakness Enumerations (CWEs), memory safety flaws, and taint tracking in C/C++ and JS. |
-| **GitHub Secrets** | Secrets Management | Securely stores sensitive tokens (`GITHUB_TOKEN`, signing certificates, release webhooks) without exposing them in code. |
-| **GitHub Actions Artifacts** | Artifact Storage & Archiving | Stores build tarballs, shared libraries (`libnode.so`), coverage reports, test failure logs, and generated HTML/JSON documentation. |
-| **GitHub Step Summaries** | Build Summaries & Observability | Renders inline markdown test summaries, coverage cards, security alerts, and notification reports directly on GitHub run pages. |
-| **GitHub Pages / Doc Tools** | Official API Documentation | Formats and serves official Node.js API documentation and HTML/JSON reference manuals generated from `tools/doc`. |
+| **`ubuntu-slim` (OpenJS Custom Self-Hosted Runners)** | **Lightweight CI/CD Runner Platform** | Hardcoded across **42 upstream workflows** (`runs-on: ubuntu-slim` in `doc.yml`, `linters.yml`, `test-linux.yml`, `build-tarball.yml`, `scorecard.yml`, `codeql.yml`, etc.). |
+| **Dedicated Multi-Arch Build Farm (`ci.nodejs.org` Jenkins)** | **Cross-Platform Compilation & Regression Testing** | Invoked in `auto-start-ci.yml` and `commit-queue.yml` via `@node-core/utils` connecting to `https://ci.nodejs.org` across 100+ bare-metal servers (IBM AIX, IBM z/OS s390x, PowerPC ppc64le, SmartOS). |
+| **`ubuntu-24.04-arm` (GitHub-Hosted Managed ARM64 Runners)** | **Native AArch64 Testing & Binary Packaging** | Hardcoded in `build-tarball.yml:100`, `coverage-linux.yml:51`, `test-shared.yml:52`, and `notify-on-push.yml:18` (`runs-on: ubuntu-24.04-arm`). |
+| **`macos-15` (GitHub-Hosted Apple Silicon macOS Runners)** | **macOS Darwin Build & Test Execution** | Configured in `test-macos.yml:21` (`runs-on: macos-15`). |
+| **`windows-2025` (GitHub-Hosted Windows Server Runners)** | **Windows Build & Test Execution** | Configured in `coverage-windows.yml:18` (`runs-on: windows-2025`). |
+| **`ubuntu-24.04` / `ubuntu-latest` (Standard GitHub-Hosted Linux)** | **Standard Linux Runner Environment** | Configured in `coverage-linux-without-intl.yml:45` (`ubuntu-24.04`), `linters.yml:16` (`ubuntu-latest`), and `scorecard.yml:27` (`ubuntu-latest`). |
+| **Developer Workstation / Developer VM** | **Local Development & Interactive Debugging** | Local developer environments executing `./configure` and `make -j` for manual builds. |
+| **Benchmarking Bare-Metal Servers** | **Performance & Latency Testing** | Isolated bare-metal hardware pool used by `benchmark.yml` to minimize virtualization noise during V8/HTTP microbenchmarks. |
+| **Public Internet & DNS Test Infrastructure** | **Real-World Network Integration Testing** | Public DNS root servers and live endpoints queried during network socket tests in `test-internet.yml`. |
 
 ---
 
-## 3. THIRD-PARTY TOOLS & LIBRARIES (`3P TOOLS`)
+## 2. 🐙 GITHUB TOOLS (`GITHUB TOOLS`)
 
-| Tool | Purpose | Role in Node.js Project |
+| Tool | Purpose | Evidence in Original Workflow (Before Changes) |
 | :--- | :--- | :--- |
-| **Clang / LLVM 19 & GCC** | C/C++ Compilers & Code Generation | Primary compilers used across Linux and macOS to compile Node.js, V8, and native C++ addons. |
-| **MSVC Build Tools & Apple Clang** | Platform-Native Compilers | Compiles native Windows binaries (`node.exe`, Win32 IOCP) and macOS Darwin binaries (Apple Silicon / Intel). |
-| **Ninja & GNU Make** | Parallel Build Generation & Execution | High-speed parallel build systems orchestrating multi-core C++ compilation. |
-| **Python 3 & `configure.py` / GYP** | Build Configuration & Meta-Build Orchestration | `configure.py` inspects system flags and generates Ninja/Makefile configurations via GYP (`tools/gyp`). |
-| **Node.js Core Test Harness (`test.py`)** | Unit, Parallel & Sequential Testing | Custom Python test runner executing thousands of parallel, sequential, message, and native addon test suites (`test/`). |
-| **Web Platform Tests (WPT Runner)** | Conformance & Standards Testing | W3C cross-browser test runner validating compliance for Fetch, Streams, URL, WebCrypto, and WebSockets. |
-| **Google Perfetto** | System Tracing & APM Telemetry | Low-level kernel tracing and performance instrumentation for production application profiling. |
-| **ngtcp2 & nghttp3** | QUIC & HTTP/3 Protocol Testing | Native transport protocol libraries and test suites validating HTTP/3 networking. |
-| **Google V8 Engine** | JavaScript & WebAssembly Engine | High-performance Google JavaScript engine compiling JS to machine code with TurboFan and Sparkplug JIT. |
-| **OpenSSL 3.x** | Cryptography & Security Provider | Cryptographic core implementing TLS 1.3, X.509 certificates, crypto primitives, and FIPS compliance. |
-| **libuv** | Asynchronous I/O & Event Loop | Multi-platform support library providing the asynchronous event loop, thread pool, file system I/O, and sockets. |
-| **ESLint & Prettier** | Code Quality (JavaScript Linting) | Static AST-based linter enforcing JavaScript formatting, syntax standards, and security rules across core and tools. |
-| **clang-format & cpplint** | Code Quality (C++ Linting) | Google style guide checker and automated formatting tool for all C/C++ header and source files (`src/`). |
-| **flake8 / pyflakes** | Code Quality (Python Linting) | Enforces PEP8 compliance and syntax validity across build scripts, doc generators, and test runners. |
-| **OpenSSF Scorecard** | Supply Chain Security Auditing | Evaluates software supply chain security posture (pinned dependencies, branch protection, dangerous workflows). |
-| **StepSecurity Harden-Runner** | Runner Security & Egress Monitoring | Kernel-level runtime agent monitoring runner socket connections and preventing credential exfiltration. |
-| **Codecov & gcovr / lcov** | Code Coverage Analysis & QA | Collects C++ `gcov` and JavaScript coverage data, generating line-by-line coverage reports and deltas. |
-| **Mozilla sccache / Actions Cache** | Distributed Compiler Caching | Caches compilation object files to drastically reduce re-compilation times of V8, OpenSSL, and Node core. |
-| **Node Benchmark Suite (`benchmark/`)** | Performance Micro-benchmarking | Rigorous benchmark suite measuring throughput and latency for HTTP, Buffers, Streams, Crypto, and Event Loop. |
-| **license-builder & check-licenses** | Legal Compliance & Attribution | Scans third-party dependencies (V8, OpenSSL, zlib, libuv) and generates consolidated `LICENSE` attribution. |
-| **Slack / Bot Integrations** | Operational Alerting & Notification | Real-time notifications for commit pushes, release staging proposals, and pull request review requests. |
+| **Public GitHub Repository (`nodejs/node`)** | **Source Control & Community Collaboration** | Canonical upstream repository hosting source code, pull requests, issue tracker, and discussions. |
+| **GitHub Actions** | **CI/CD Workflow Automation** | Upstream execution engine running 45 YAML pipelines in `.github/workflows/*.yml`. |
+| **`actions/checkout`** | **Repository Checkout** | `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1` across 46 workflow jobs. |
+| **`actions/setup-node`** | **Node.js Toolchain Provisioning** | `uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020` across 15 workflow jobs. |
+| **`actions/setup-python`** | **Python Runtime Provisioning** | `uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97` across 17 workflow jobs. |
+| **`actions/upload-artifact`** | **Artifact Packaging & Storage** | `uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` across 8 workflow jobs. |
+| **`actions/download-artifact`** | **Inter-Job Artifact Retrieval** | `uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c` across 6 workflow jobs. |
+| **`actions/github-script`** | **Octokit GitHub API Scripting** | `uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3` in `commit-lint.yml`, `benchmark.yml`, `build-shared.yml`. |
+| **`actions/stale`** | **Stale Issue & PR Triage** | `uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93` in `stale.yml` and `close-stalled.yml`. |
+| **`actions/cache`** | **Build & Dependency Caching** | `uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9` in `update-v8.yml`. |
+| **GitHub Secrets** | **Secrets Management** | `secrets.GH_USER_TOKEN`, `secrets.JENKINS_USER`, `secrets.JENKINS_TOKEN`, `secrets.CACHIX_AUTH_TOKEN`, `secrets.CODECOV_TOKEN`, `secrets.SLACK_WEBHOOK`, `secrets.WPT_FYI_PASSWORD`. |
+| **GitHub Releases** | **Release Distribution & Tagging** | Official release proposal generation and source tarball uploads in `create-release-proposal.yml`, `major-release.yml`, and `build-tarball.yml`. |
+| **GitHub Bot Account (`@nodejs-github-bot`)** | **Automated Commits & PR Creation** | Authenticated via `secrets.GH_USER_TOKEN` across 22 workflows to bypass branch protections and open maintenance PRs. |
+| **CodeQL (`github/codeql-action`)** | **Security Scanning (SAST Vulnerabilities)** | `uses: github/codeql-action/init`, `analyze`, `upload-sarif` (`@cdf488f...`) in `codeql.yml` and `scorecard.yml`. |
+| **Dependabot** | **Dependency Vulnerability Alerts** | Monitored upstream GitHub Actions dependencies for security advisory notifications. |
+
+---
+
+## 3. 🧩 3P TOOLS & LIBRARIES (`3P TOOLS`)
+
+| Tool | Purpose | Evidence in Original Workflow (Before Changes) |
+| :--- | :--- | :--- |
+| **Jenkins (`ci.nodejs.org`)** | **Remote Multi-Architecture Build Farm** | `auto-start-ci.yml:65` and `commit-queue.yml:83` invoking `ncu-config set jenkins_token "$JENKINS_TOKEN"` calling `ci.nodejs.org`. |
+| **Cachix (`cachix-action`)** | **Managed Nix Binary Caching** | `uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71` pushing to `https://nodejs.cachix.org` with `CACHIX_AUTH_TOKEN`. |
+| **Nix (`install-nix-action`)** | **Nix Package Manager Installation** | `uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24` in `build-shared.yml`, `benchmark.yml`, `nix-changes.yml`. |
+| **Codecov (`codecov-action`)** | **Code Coverage Analysis & PR Reporting** | `uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f` in `coverage-linux.yml:88` with `CODECOV_TOKEN`. |
+| **Slack (`action-slack-notify`)** | **Real-Time Team Alerting** | `uses: rtCamp/action-slack-notify@33ca3be66c6f378fe1610fd1d5258632dbed5e58` in `notify-on-push.yml:32`, `notify-on-review-wanted.yml:25`, `post-release.yml:35`. |
+| **Web Platform Tests Dashboard (`wpt.fyi`)** | **Web Standards Compliance Reporting** | `daily-wpt-fyi.yml:162` uploading results to `https://wpt.fyi/api/results/upload` with `WPT_FYI_PASSWORD` and `WPT_FYI_USERNAME`. |
+| **StepSecurity Harden-Runner** | **Runner Runtime Security & Egress Monitoring** | `uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c` in `scorecard.yml:39`. |
+| **OpenSSF Scorecard** | **Supply Chain Security Auditing** | `uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc` in `scorecard.yml:45`. |
+| **AgentScan (`agentscan.tools`)** | **AI / Bot Contributor Detection** | `uses: MatteoGabriele/agentscan-action@8112fb79b33fafb8506159df20129a34209ac410` calling `https://agentscan.tools` in `contributor-guidance.yml:23`. |
+| **Mozilla sccache (`sccache-action`)** | **Distributed C/C++ Compiler Caching** | `uses: Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba` in `build-tarball.yml:123`, `coverage-linux.yml:71`. |
+| **`@node-core/utils` CLI** | **Maintainer CI & Release CLI** | `npm install -g @node-core/utils` in `auto-start-ci.yml:58`, `commit-queue.yml:73`, `create-release-proposal.yml:70`. |
+| **`peter-evans/create-pull-request`** | **Automated PR Generation** | `uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1` in `tools.yml:45` and `update-v8.yml:60`. |
+| **`gr2m/create-or-update-pull-request-action`** | **Automated Branch/PR Creation** | `uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b` in `license-builder.yml:42`, `find-inactive-collaborators.yml:35`. |
+| **`mszostok/codeowners-validator`** | **CODEOWNERS Syntax Validation** | `uses: mszostok/codeowners-validator@7f3f5e28c6d7b8dfae5731e54ce2272ca384592f` in `linters.yml:75`. |
+| **`nodejs/node-pr-labeler`** | **Subsystem PR Path Labeling** | `uses: nodejs/node-pr-labeler@d4cf1b8b9f23189c37917000e5e17e796c770a6b` in `label-pr.yml:25`. |
+| **Clang 19 / LLVM & GCC** | **C/C++ Compilers & Code Generation** | Installed via `.github/actions/install-clang` across `build-tarball.yml`, `coverage-linux.yml`, and `test-linux.yml`. |
+| **MSVC Build Tools & Apple Clang** | **Windows & macOS Compilers** | Windows Visual C++ toolchain in `coverage-windows.yml` and Xcode Apple Clang in `test-macos.yml`. |
+| **Ninja & GNU Make** | **Build Platform & Compilation Drivers** | `apt-get install -y ninja-build` in `daily.yml` and `make -j` in `test-linux.yml`, `build-tarball.yml`. |
+| **Python 3 & GYP (`configure.py`)** | **Build Configuration & Meta-Build** | `python configure.py` and `tools/gyp` generating build files in `test-linux.yml`, `build-tarball.yml`. |
+| **Node.js Core Test Runner (`test.py`)** | **Unit & Regression Testing** | `python tools/test.py` executing `parallel`, `sequential`, and `addons` suites in `test-linux.yml`, `coverage-linux.yml`. |
+| **Web Platform Tests (WPT Runner)** | **Web Standards Conformance Testing** | Custom WPT harness in `daily-wpt-fyi.yml` and `update-wpt.yml` validating Fetch, Streams, and WebCrypto. |
+| **Google Perfetto** | **System Tracing & APM Telemetry** | Low-level tracing instrumentation compiled and verified in `test-linux-perfetto.yml`. |
+| **ngtcp2 & nghttp3** | **QUIC & HTTP/3 Protocol Testing** | Vendored HTTP/3 transport protocol libraries tested in `test-linux-quic.yml`. |
+| **Google V8 Engine** | **JavaScript & WebAssembly JIT Engine** | Core runtime engine in `deps/v8`, updated via `update-v8.yml`. |
+| **OpenSSL 3.x** | **Cryptography & TLS Security Provider** | Embedded crypto engine in `deps/openssl`, updated via `update-openssl.yml`. |
+| **libuv** | **Asynchronous I/O & Event Loop** | Core asynchronous event loop in `deps/uv`. |
+| **ESLint & Prettier** | **JavaScript Linting & Formatting** | Executed in `linters.yml` via `make lint-js`. |
+| **clang-format & cpplint** | **C++ Linting & Style Checking** | Executed in `linters.yml` via `make lint-cpp`. |
+| **flake8 / pyflakes** | **Python Linting** | Executed in `linters.yml` via `make lint-py`. |
+| **gcovr / lcov** | **Code Coverage Instrumentation** | `pip install gcovr==7.2` in `coverage-linux.yml` and `coverage-linux-without-intl.yml`. |
+| **license-builder / check-licenses** | **License & Legal Attribution Generator** | Executed in `license-builder.yml` via `tools/actions/check-licenses`. |
+| **Node Benchmark Suite (`benchmark/`)** | **Performance Micro-benchmarking** | Executed in `benchmark.yml` running microbenchmarks against V8, HTTP, and Streams. |
