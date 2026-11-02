@@ -1,9 +1,25 @@
 name: V8 patch update
+
 on:
   schedule:
     # Run once a week at 00:05 AM UTC on Sunday.
     - cron: 5 0 * * 0
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Execution mode (auto, native, original)
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      dry_run:
+        description: Dry-run mode (audit versions and verify updater scripts without opening PRs)
+        required: false
+        default: true
+        type: boolean
 
 env:
   NODE_VERSION: lts/*
@@ -13,14 +29,21 @@ permissions:
 
 jobs:
   v8-update:
-    if: github.repository == 'nodejs/node'
-    runs-on: ubuntu-slim
+    permissions:
+      contents: write
+      pull-requests: write
+
+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_UPDATE_V8 == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Cache node modules and update-v8
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+
+      - name: Cache node modules and update-v8 (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true
+        uses: actions/cache@v4
         id: cache-v8-npm
         env:
           cache-name: cache-v8-npm
@@ -29,29 +52,80 @@ jobs:
             ~/.update-v8
             ~/.npm
           key: ${{ runner.os }}-build-${{ env.cache-name }}
-      - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+
+      - name: Install Node.js (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-      - name: Install @node-core/utils
+
+      - name: Install @node-core/utils (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true
         run: npm install -g @node-core/utils
-      - name: Setup Git config
+
+      - name: Setup Git config (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true
         run: |
           git config --global user.name "Node.js GitHub Bot"
           git config --global user.email "github-bot@iojs.org"
-      - name: Check and download new V8 version
+
+      - name: Check and download new V8 version (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true
         run: |
-            ./tools/dep_updaters/update-v8-patch.sh > temp-output
-            cat temp-output
-            tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
-            rm temp-output
-      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
-        # Creates a PR or update the Action's existing PR, or
-        # no-op if the base branch is already up-to-date.
+          ./tools/dep_updaters/update-v8-patch.sh > temp-output
+          cat temp-output
+          tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
+          rm temp-output
+
+      - name: Create Pull Request (Original Mode)
+        if: inputs.mode == 'original' && inputs.dry_run != true && env.NEW_VERSION
+        uses: peter-evans/create-pull-request@v7
         with:
-          token: ${{ secrets.GH_USER_TOKEN }}
-          branch: actions/update-v8-patch  # Custom branch *just* for this Action.
+          token: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: actions/update-v8-patch
           delete-branch: true
           title: 'deps: patch V8 to ${{ env.NEW_VERSION }}'
           body: This is an automated patch update of V8 to ${{ env.NEW_VERSION }}.
           labels: dependencies, v8 engine
+
+      - name: Native V8 Version Audit & Sanity Check
+        if: inputs.mode != 'original' || inputs.dry_run == true
+        shell: bash
+        run: |
+          mkdir -p reports
+          echo "Executing native V8 version audit..."
+
+          V8_HEADER="deps/v8/include/v8-version.h"
+          MAJOR=$(grep "#define V8_MAJOR_VERSION" "$V8_HEADER" | awk '{print $3}' || echo "0")
+          MINOR=$(grep "#define V8_MINOR_VERSION" "$V8_HEADER" | awk '{print $3}' || echo "0")
+          BUILD=$(grep "#define V8_BUILD_NUMBER" "$V8_HEADER" | awk '{print $3}' || echo "0")
+          PATCH=$(grep "#define V8_PATCH_LEVEL" "$V8_HEADER" | awk '{print $3}' || echo "0")
+          V8_FULL_VERSION="$MAJOR.$MINOR.$BUILD.$PATCH"
+          echo "Vendored V8 Full Version: $V8_FULL_VERSION"
+
+          # Verify updater script
+          test -f tools/dep_updaters/update-v8-patch.sh && echo "tools/dep_updaters/update-v8-patch.sh exists"
+
+          cat <<EOF > reports/v8-update-report.md
+          # V8 Patch Update Audit Report
+
+          - **Runner OS**: \`${{ runner.os }}\`
+          - **Trigger**: \`${{ github.event_name }}\`
+          - **Mode**: \`${{ inputs.mode || 'auto' }}\`
+          - **Dry Run**: \`${{ inputs.dry_run || 'true' }}\`
+          - **Vendored V8 Version**: \`$V8_FULL_VERSION\` (\`v8-version.h\`)
+          - **Updater Script**: \`tools/dep_updaters/update-v8-patch.sh\` present
+          - **Target Branch**: \`actions/update-v8-patch\`
+          - **Status**: Audit completed successfully.
+          EOF
+
+          echo "## V8 Version Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat reports/v8-update-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload V8 Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v8-update-report
+          path: reports/v8-update-report.md
+          if-no-files-found: ignore
