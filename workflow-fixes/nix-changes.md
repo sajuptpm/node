@@ -87,7 +87,25 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41366237198`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41366237198](https://github.com/sajuptpm/node/actions/runs/41366237198)
+- **Trigger**: `workflow_dispatch` (inputs: `test_scope: smoke`, `pr_number: 0`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: ~15 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `resolve-matrix` | `success` (`✓`) | 2s | `ubuntu-latest` | Resolved dynamic matrix configuration for smoke scope |
+| `lint-nix` | `success` (`✓`) | 7s | `ubuntu-latest` | Validated Nix syntax and structure, uploaded `nix-lint-report` |
+| `x86_64-linux: dependencies diff` | `success` (`✓`) | 6s | `ubuntu-latest` | Computed requisites delta, rendered diff to summary, uploaded `requisites-x86_64-linux` |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `nix-lint-report` | ~4 KB | Validated `shell.nix` Nix definition |
+| `requisites-x86_64-linux` | ~2 KB | `pr_number.txt`, `requisites-x86_64-linux-before.list`, `requisites-x86_64-linux-after.list` |
 
 ---
 
