@@ -76,7 +76,30 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41370156681`](https://github.com/sajuptpm/node/actions/runs/41370156681)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41370156681](https://github.com/sajuptpm/node/actions/runs/41370156681)
+- **Trigger Type**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `14s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Run actions/checkout@v4` | Completed | 2s | Checked out repository root at ref `main` |
+| `Cache node modules and update-v8` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Install Node.js` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Install @node-core/utils` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Setup Git config` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Check and download new V8 version` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Create Pull Request` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Native V8 Version Audit & Sanity Check` | Completed | 3s | Inspected vendored version (`14.6.202.34`) in `deps/v8/include/v8-version.h` and validated `tools/dep_updaters/update-v8-patch.sh` |
+| `Upload V8 Report Artifact` | Completed | 2s | Uploaded `reports/v8-update-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `v8-update-report`
+  - Contents: `reports/v8-update-report.md` (detailed markdown report containing vendored V8 version components, updater script verification, target branch, and audit summary)
 
 ---
 
