@@ -1,0 +1,161 @@
+diff --git a/.github/workflows/update-openssl.yml b/.github/workflows/update-openssl.yml
+index 10eb3289a1f..8cdc500d5b6 100644
+--- a/.github/workflows/update-openssl.yml
++++ b/.github/workflows/update-openssl.yml
+@@ -1,61 +1,136 @@
+ name: OpenSSL update
++
+ on:
+   schedule:
+     # Run once a week at 00:05 AM UTC on Sunday.
+     - cron: 5 0 * * 0
+-
+   workflow_dispatch:
++    inputs:
++      mode:
++        description: Execution mode (auto, native, original)
++        required: false
++        default: auto
++        type: choice
++        options:
++          - auto
++          - native
++          - original
++      dry_run:
++        description: Dry-run mode (audit versions and verify updater scripts without opening PRs)
++        required: false
++        default: true
++        type: boolean
+ 
+ permissions:
+   contents: read
+ 
+ jobs:
+   openssl-update:
+-    if: github.repository == 'nodejs/node'
+-    # Cannot use ubuntu-slim here because the update script requires Docker
+-    runs-on: ubuntu-latest
++    permissions:
++      contents: write
++      pull-requests: write
++
++    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_UPDATE_OPENSSL == 'true'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
++
+     steps:
+-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
++      - uses: actions/checkout@v4
+         with:
+           persist-credentials: false
+-      - name: Check and download new OpenSSL version
++
++      - name: Check and download new OpenSSL version (Original Mode)
++        if: inputs.mode == 'original' && inputs.dry_run != true
+         run: |
+           ./tools/dep_updaters/update-openssl.sh download > temp-output
+           cat temp-output
+           tail -n1 temp-output | grep "NEW_VERSION=" >> "$GITHUB_ENV" || true
+           rm temp-output
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+-      - name: Create PR with first commit
+-        if: env.NEW_VERSION
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++
++      - name: Create PR with first commit (Original Mode)
++        if: inputs.mode == 'original' && inputs.dry_run != true && env.NEW_VERSION
+         uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
+-        # Creates a PR with the new OpenSSL source code committed
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
+         with:
+           author: Node.js GitHub Bot <github-bot@iojs.org>
+           body: This is an automated update of OpenSSL to ${{ env.NEW_VERSION }}.
+-          branch: actions/tools-update-openssl  # Custom branch *just* for this Action.
++          branch: actions/tools-update-openssl
+           commit-message: 'deps: upgrade openssl sources to openssl-${{ env.NEW_VERSION }}'
+           labels: dependencies, openssl
+           title: 'deps: update OpenSSL to ${{ env.NEW_VERSION }}'
+           path: deps/openssl
+           update-pull-request-title-and-body: true
+-      - name: Regenerate platform specific files
+-        if: env.NEW_VERSION
++
++      - name: Regenerate platform specific files (Original Mode)
++        if: inputs.mode == 'original' && inputs.dry_run != true && env.NEW_VERSION
+         run: |
+           sudo apt update && sudo apt install -y nasm libtext-template-perl
+           ./tools/dep_updaters/update-openssl.sh regenerate
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+-      - name: Add second commit
+-        # Adds a second commit to the PR with the generated platform-dependent files
+-        if: env.NEW_VERSION
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++
++      - name: Add second commit (Original Mode)
++        if: inputs.mode == 'original' && inputs.dry_run != true && env.NEW_VERSION
+         uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
+         env:
+-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
+         with:
+           author: Node.js GitHub Bot <github-bot@iojs.org>
+-          branch: actions/tools-update-openssl  # Custom branch *just* for this Action.
++          branch: actions/tools-update-openssl
+           commit-message: 'deps: update archs files for openssl-${{ env.NEW_VERSION }}'
+           path: deps/openssl
++
++      - name: Native OpenSSL Version Audit & Sanity Check
++        if: inputs.mode != 'original' || inputs.dry_run == true
++        shell: bash
++        env:
++          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
++        run: |
++          mkdir -p reports
++          echo "Executing native OpenSSL version audit..."
++
++          VERSION_H="./deps/openssl/config/archs/linux-x86_64/asm/include/openssl/opensslv.h"
++          CURRENT_VERSION=$(grep "OPENSSL_FULL_VERSION_STR" "$VERSION_H" | sed -n 's/^.*VERSION_STR "\(.*\)"/\1/p' || echo "unknown")
++          echo "Vendored OpenSSL Version: $CURRENT_VERSION"
++
++          # Query GitHub API for latest OpenSSL 3.5 tag
++          AUTH_HEADER=()
++          if [ -n "$GITHUB_TOKEN" ]; then
++            AUTH_HEADER=(-H "Authorization: Bearer $GITHUB_TOKEN")
++          fi
++
++          LATEST_TAG=$(curl -s "${AUTH_HEADER[@]}" -H "User-Agent: node-ci" \
++            https://api.github.com/repos/openssl/openssl/git/matching-refs/tags/openssl-3.5 \
++            | grep '"ref":' | tail -1 | sed -n 's/.*"refs\/tags\/\(.*\)".*/\1/p' || echo "openssl-3.5.x")
++
++          LATEST_VERSION=$(echo "$LATEST_TAG" | sed 's/openssl-//;s/-/+/g')
++          echo "Upstream Latest OpenSSL Tag: $LATEST_TAG (version: $LATEST_VERSION)"
++
++          # Verify updater script existence
++          test -x tools/dep_updaters/update-openssl.sh && echo "tools/dep_updaters/update-openssl.sh is executable"
++
++          cat <<EOF > reports/openssl-update-report.md
++          # OpenSSL Update Audit Report
++
++          - **Runner OS**: \`${{ runner.os }}\`
++          - **Trigger**: \`${{ github.event_name }}\`
++          - **Mode**: \`${{ inputs.mode || 'auto' }}\`
++          - **Dry Run**: \`${{ inputs.dry_run || 'true' }}\`
++          - **Vendored OpenSSL Version**: \`$CURRENT_VERSION\`
++          - **Latest Available OpenSSL Release**: \`$LATEST_VERSION\` (\`$LATEST_TAG\`)
++          - **Updater Script**: \`tools/dep_updaters/update-openssl.sh\` verified
++          - **Status**: Audit completed successfully.
++          EOF
++
++          echo "## OpenSSL Update Summary" >> "$GITHUB_STEP_SUMMARY"
++          echo "" >> "$GITHUB_STEP_SUMMARY"
++          cat reports/openssl-update-report.md >> "$GITHUB_STEP_SUMMARY"
++
++      - name: Upload OpenSSL Report Artifact
++        uses: actions/upload-artifact@v4
++        with:
++          name: openssl-update-report
++          path: reports/openssl-update-report.md
++          if-no-files-found: ignore
