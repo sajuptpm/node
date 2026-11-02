@@ -195,3 +195,6 @@ workflow-fixes/test-suite-execution-report.md
 .devcontainer/**
 !.devcontainer/base/
 !.devcontainer/base/devcontainer.json
+
+# Office temporary lock files
+~$*

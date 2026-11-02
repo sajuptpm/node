@@ -189,3 +189,14 @@ python workflow-fixes/scripts/download-artifacts.py 41370156681
 # Download artifacts to a custom directory
 python workflow-fixes/scripts/download-artifacts.py 41369940119 --output-dir my-artifacts/
 ```
+
+---
+
+### H. `fill-column-33.py` & `fill-nodejs-assessment.py`
+Generates and maintains the technical assessment matrices and effort estimations for all 45 workflows in Excel spreadsheets (`nodejs_pipeline_result.xlsx`, `pipeline_result.xlsx`), including Column 33 enterprise release necessity evaluations and justifications.
+
+```bash
+# Populate assessment and Column 33 release evaluation across all 45 workflows
+python workflow-fixes/scripts/fill-column-33.py
+```
+
