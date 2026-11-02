@@ -75,7 +75,28 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41369669431`](https://github.com/sajuptpm/node/actions/runs/41369669431)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41369669431](https://github.com/sajuptpm/node/actions/runs/41369669431)
+- **Trigger Type**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `23s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Checkout nodejs/node` | Completed | 2s | Checked out repository root at ref `main` |
+| `Checkout unicode-org/icu-data` | Completed | 12s | Checked out `unicode-org/icu-data` into `icu-data` |
+| `Record and Compare Versions` | Completed | 0s | Compared local fixture (`2026d`) vs upstream latest (`2026d`) |
+| `Execute Timezone Updater` | Skipped | 0s | Bypassed because versions match and running in dry-run mode |
+| `Open Pull Request (Original Mode)` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Native Timezone Audit & Summary` | Completed | 2s | Generated report confirming timezone data is up to date |
+| `Upload Timezone Report Artifact` | Completed | 2s | Uploaded `reports/timezone-update-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `timezone-update-report`
+  - Contents: `reports/timezone-update-report.md` (detailed markdown report containing version comparison, updater script status, and audit conclusion)
 
 ---
 
