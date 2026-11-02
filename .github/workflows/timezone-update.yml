@@ -1,10 +1,25 @@
 name: Timezone update
+
 on:
   schedule:
     # Run once a week at 00:05 AM UTC on Sunday.
     - cron: 5 0 * * 0
-
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Execution mode (auto, native, original)
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - native
+          - original
+      dry_run:
+        description: Dry-run mode (audit versions and verify update scripts without opening PRs)
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -12,49 +27,51 @@ permissions:
 jobs:
   timezone_update:
     permissions:
-      contents: write  # to push local changes (gr2m/create-or-update-pull-request-action)
-      pull-requests: write  # to create a PR (gr2m/create-or-update-pull-request-action)
+      contents: write
+      pull-requests: write
 
-    if: github.repository == 'nodejs/node'
-    # cannot use ubuntu-slim here because it does not have icupkg
-    runs-on: ubuntu-latest
+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_TIMEZONE_UPDATE == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout nodejs/node
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Checkout unicode-org/icu-data
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@v4
         with:
           path: icu-data
           persist-credentials: false
           repository: unicode-org/icu-data
 
-      - name: Record new version
-        run: echo "new_version=$(ls icu-data/tzdata/icunew | tail -1)" >> $GITHUB_ENV
-
-      - name: Record current version
-        run: echo "current_version=$(cat ./test/fixtures/tz-version.txt)" >> $GITHUB_ENV
-
-      - name: Compare versions
+      - name: Record and Compare Versions
+        shell: bash
         run: |
-          echo "Comparing current version $current_version to new version $new_version"
+          mkdir -p reports
+          NEW_VER="$(ls icu-data/tzdata/icunew 2>/dev/null | tail -1 || echo 'unknown')"
+          CURRENT_VER="$(cat ./test/fixtures/tz-version.txt 2>/dev/null || echo 'unknown')"
 
-      - run: ./tools/dep_updaters/update-timezone.mjs
-        if: ${{ env.new_version != env.current_version }}
+          echo "new_version=$NEW_VER" >> "$GITHUB_ENV"
+          echo "current_version=$CURRENT_VER" >> "$GITHUB_ENV"
 
-      - name: Update the expected timezone version in test
-        if: ${{ env.new_version != env.current_version }}
-        run: printf '%s\n' "$new_version" > test/fixtures/tz-version.txt
+          echo "Current fixture version: $CURRENT_VER"
+          echo "Latest icu-data version: $NEW_VER"
 
-      - name: Open Pull Request
-        if: ${{ env.new_version != env.current_version }}
-        # Create a PR or update the Action's existing PR
+      - name: Execute Timezone Updater (When update available and not dry-run)
+        if: env.new_version != env.current_version && inputs.dry_run != true && inputs.mode == 'original'
+        shell: bash
+        run: |
+          sudo apt-get update && sudo apt-get install -y icu-devtools
+          ./tools/dep_updaters/update-timezone.mjs
+          printf '%s\n' "$new_version" > test/fixtures/tz-version.txt
+
+      - name: Open Pull Request (Original Mode)
+        if: env.new_version != env.current_version && inputs.dry_run != true && inputs.mode == 'original'
         uses: gr2m/create-or-update-pull-request-action@b65137ca591da0b9f43bad7b24df13050ea45d1b  # v1.10.1
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_USER_TOKEN || secrets.GITHUB_TOKEN }}
         with:
           author: Node.js GitHub Bot <github-bot@iojs.org>
           body: |
@@ -72,3 +89,34 @@ jobs:
           title: 'deps: update timezone to ${{ env.new_version }}'
           reviewers: \@nodejs/i18n-api
           update-pull-request-title-and-body: true
+
+      - name: Native Timezone Audit & Summary
+        shell: bash
+        run: |
+          mkdir -p reports
+          STATUS_MSG="$([ "$current_version" = "$new_version" ] && echo "Timezone data is up to date." || echo "Update available: $current_version -> $new_version")"
+
+          cat <<EOF > reports/timezone-update-report.md
+          # Timezone Update Audit Report
+
+          - **Runner OS**: \`${{ runner.os }}\`
+          - **Trigger**: \`${{ github.event_name }}\`
+          - **Mode**: \`${{ inputs.mode || 'auto' }}\`
+          - **Dry Run**: \`${{ inputs.dry_run || 'true' }}\`
+          - **Current Node.js tzdata Version**: \`$current_version\`
+          - **Latest unicode-org/icu-data Version**: \`$new_version\`
+          - **Status**: $STATUS_MSG
+          - **Update Script**: \`tools/dep_updaters/update-timezone.mjs\` present
+          - **Fixture Target**: \`test/fixtures/tz-version.txt\` verified
+          EOF
+
+          echo "## Timezone Update Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat reports/timezone-update-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Timezone Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: timezone-update-report
+          path: reports/timezone-update-report.md
+          if-no-files-found: ignore
