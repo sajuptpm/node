@@ -6,20 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'Specific PR number to check (leave empty to scan all open PRs with author ready label)'
+        description: Specific PR number to check (leave empty to scan all open PRs with author ready label)
+
         required: false
         default: ''
       mode:
         description: 'Execution mode: auto (default), native (audit summary/artifact), original (live unlabel & comment)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Audit conflicting PRs without modifying labels or posting comments'
+        description: Audit conflicting PRs without modifying labels or posting comments
+
         required: false
         default: true
         type: boolean
@@ -71,7 +73,7 @@ jobs:
         run: |
           mkdir -p out/conflicts
           AUDIT_FILE="out/conflicts/audit-report.md"
-          
+
           echo "### Conflicting PRs Unlabel Audit" > "$AUDIT_FILE"
           echo "- **Execution Mode**: $RUN_MODE" >> "$AUDIT_FILE"
           echo "- **Dry Run**: $IS_DRY_RUN" >> "$AUDIT_FILE"
@@ -86,7 +88,7 @@ jobs:
             NUM=$(echo "$PR_JSON" | jq -r '.number // empty')
             MERGEABLE=$(echo "$PR_JSON" | jq -r '.mergeable // empty')
             STATE=$(echo "$PR_JSON" | jq -r '.state // empty')
-            
+
             if [ -n "$NUM" ]; then
               COUNT=$((COUNT + 1))
               if [ "$MERGEABLE" = "CONFLICTING" ]; then
@@ -105,12 +107,12 @@ jobs:
           else
             echo "Scanning open PRs labeled 'author ready'..."
             PRS=$(gh pr list --repo "$GITHUB_REPOSITORY" --label 'author ready' --state open --limit 100 --json number,mergeable,state 2>/dev/null || echo "[]")
-            
+
             echo "$PRS" | jq -c '.[]' | while read -r pr; do
               NUM=$(echo "$pr" | jq -r '.number')
               MERGEABLE=$(echo "$pr" | jq -r '.mergeable')
               STATE=$(echo "$pr" | jq -r '.state')
-              
+
               if [ "$MERGEABLE" = "CONFLICTING" ]; then
                 if [ "$RUN_MODE" = "original" ] && [ "$IS_DRY_RUN" = "false" ]; then
                   gh pr edit "$NUM" --repo "$GITHUB_REPOSITORY" --remove-label 'author ready' || true

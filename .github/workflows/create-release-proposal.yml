@@ -11,19 +11,21 @@ on:
       release-date:
         required: true
         type: string
-        description: 'The release date in YYYY-MM-DD format'
-        default: '2026-11-02'
+        description: The release date in YYYY-MM-DD format
+
+        default: 2026-11-02
       mode:
         description: 'Execution mode: auto (default), native (uses GITHUB_TOKEN & artifacts), original (strict GH_USER_TOKEN)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Simulate release proposal locally without creating remote branches or PRs'
+        description: Simulate release proposal locally without creating remote branches or PRs
+
         required: false
         default: true
         type: boolean

@@ -7,7 +7,7 @@ on:
         description: The runner to use for the job.
         required: false
         type: string
-        default: 'ubuntu-latest'
+        default: ubuntu-latest
       extra-nix-flags:
         description: Additional CLI arguments appended to the nix-shell invocation.
         required: false
@@ -32,7 +32,7 @@ on:
         description: Execution mode (auto, native, original)
         required: false
         type: string
-        default: 'auto'
+        default: auto
       smoke_test:
         description: Run fast smoke verification
         required: false
@@ -48,7 +48,7 @@ on:
         description: The runner to use for the job.
         required: false
         type: string
-        default: 'ubuntu-latest'
+        default: ubuntu-latest
       extra-nix-flags:
         description: Additional CLI arguments appended to the nix-shell invocation.
         required: false
@@ -73,7 +73,7 @@ on:
         description: Execution mode (auto, native, original)
         required: false
         type: choice
-        default: 'auto'
+        default: auto
         options:
           - auto
           - native

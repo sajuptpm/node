@@ -7,20 +7,22 @@ on:
   workflow_dispatch:
     inputs:
       subsystems:
-        description: 'Subsystems to update (url, urlpattern, WebCryptoAPI, all, or JSON array)'
+        description: Subsystems to update (url, urlpattern, WebCryptoAPI, all, or JSON array)
+
         required: false
-        default: 'url'
+        default: url
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (upstream PR creation)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Smoke test WPT update and PR metadata generation'
+        description: Smoke test WPT update and PR metadata generation
+
         required: false
         default: true
         type: boolean

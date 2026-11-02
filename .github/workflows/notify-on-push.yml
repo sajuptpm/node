@@ -9,23 +9,26 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (Slack notify)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       simulate_force_push:
-        description: 'Simulate force-push notification event'
+        description: Simulate force-push notification event
+
         required: false
         default: false
         type: boolean
       commit_sha:
-        description: 'Specific commit SHA to validate (defaults to HEAD)'
+        description: Specific commit SHA to validate (defaults to HEAD)
+
         required: false
         default: ''
       fail_on_invalid:
-        description: 'Whether invalid commit message should fail the workflow step'
+        description: Whether invalid commit message should fail the workflow step
+
         required: false
         default: false
         type: boolean

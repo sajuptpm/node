@@ -7,14 +7,16 @@ on:
   workflow_dispatch:
     inputs:
       create_pr:
-        description: 'Open a pull request with updated README.md if inactive TSC members found'
+        description: Open a pull request with updated README.md if inactive TSC members found
+
         required: false
         default: false
         type: boolean
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto

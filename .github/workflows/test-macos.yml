@@ -64,14 +64,15 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (smoke test & diagnostic report), original (full make build & test-ci)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       smoke_test:
-        description: 'Run quick smoke test rather than 2-hour full build'
+        description: Run quick smoke test rather than 2-hour full build
+
         required: false
         default: true
         type: boolean

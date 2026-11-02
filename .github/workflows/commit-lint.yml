@@ -9,22 +9,25 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (strict failure)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       pr_number:
-        description: 'Pull request number to validate (if validating an existing PR)'
+        description: Pull request number to validate (if validating an existing PR)
+
         required: false
-        default: '1'
+        default: 1
       commit_message:
-        description: 'Custom commit message string to test directly (overrides PR fetch if specified)'
+        description: Custom commit message string to test directly (overrides PR fetch if specified)
+
         required: false
         default: ''
       fail_on_invalid:
-        description: 'Whether validation failure should fail the step'
+        description: Whether validation failure should fail the step
+
         required: false
         default: false
         type: boolean

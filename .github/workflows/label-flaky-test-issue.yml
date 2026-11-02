@@ -4,24 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: 'Issue number to inspect/label (optional)'
+        description: Issue number to inspect/label (optional)
+
         required: false
         default: ''
         type: string
       issue_body:
-        description: 'Sample issue body for testing label extraction'
+        description: Sample issue body for testing label extraction
+
         required: false
-        default: "Platform\n\nLinux x64, macOS ARM64, Windows\n\nOther details"
+        default: Platform\n\nLinux x64, macOS ARM64, Windows\n\nOther details
         type: string
       apply_labels:
-        description: 'Actually apply labels to the issue (requires valid issue number)'
+        description: Actually apply labels to the issue (requires valid issue number)
+
         required: false
         default: false
         type: boolean
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto

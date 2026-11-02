@@ -15,17 +15,17 @@ on:
       commit:
         required: false
         type: string
-        default: 'HEAD'
+        default: HEAD
         description: The expected HEAD of the PR
       category:
         required: false
         type: string
-        default: 'misc'
+        default: misc
         description: The category (or categories) of tests to run, for example misc, buffers, cluster etc.
       filter:
         type: string
         required: false
-        default: 'arguments'
+        default: arguments
         description: A substring to restrict the benchmarks to run in a category. e.g. `arguments`
       runs:
         type: number
@@ -40,7 +40,7 @@ on:
       mode:
         type: choice
         required: false
-        default: 'auto'
+        default: auto
         options:
           - auto
           - native

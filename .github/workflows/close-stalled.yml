@@ -6,26 +6,30 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Audit stalled issues and PRs without actually closing them'
+        description: Audit stalled issues and PRs without actually closing them
+
         required: false
         default: true
         type: boolean
       days_before_close:
-        description: 'Days before closing stalled items'
+        description: Days before closing stalled items
+
         required: false
         default: 30
         type: number
       operations_per_run:
-        description: 'Max API operations per run'
+        description: Max API operations per run
+
         required: false
         default: 100
         type: number

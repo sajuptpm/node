@@ -8,18 +8,20 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native token & summary), original (strict GH_USER_TOKEN)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       pr_number:
-        description: 'PR number to evaluate and label (for manual dispatch)'
+        description: PR number to evaluate and label (for manual dispatch)
+
         required: false
-        default: '1'
+        default: 1
       dry_run:
-        description: 'Simulate label evaluation without modifying PR'
+        description: Simulate label evaluation without modifying PR
+
         required: false
         default: false
         type: boolean

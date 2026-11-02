@@ -7,19 +7,23 @@ on:
   workflow_dispatch:
     inputs:
       since:
-        description: 'Time window for inactivity check (e.g. 12 months ago, 6 months ago)'
+        description: Time window for inactivity check (e.g. 12 months ago, 6 months ago)
+
         required: false
-        default: '12 months ago'
+        default: 12 months ago
+
         type: string
       create_pr:
-        description: 'Open a pull request with updated README.md if inactive collaborators found'
+        description: Open a pull request with updated README.md if inactive collaborators found
+
         required: false
         default: false
         type: boolean
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto

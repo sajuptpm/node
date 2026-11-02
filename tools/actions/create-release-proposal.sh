@@ -44,6 +44,7 @@ TEMP_BODY="$(awk -v MAX_BODY_LENGTH="65534" \
       print
     }" "doc/changelogs/CHANGELOG_V${RELEASE_LINE}.md" || echo "…")"
 
+DRY_RUN="${DRY_RUN:-false}"
 # Handle dry run mode in non-enterprise / fork environments
 if [ "$DRY_RUN" = "true" ]; then
   echo "Dry run mode active: release prepare completed locally. Skipping remote branch and PR creation."

@@ -6,9 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       language:
-        description: 'Language to analyze (javascript, python, cpp, all)'
+        description: Language to analyze (javascript, python, cpp, all)
+
         required: false
-        default: 'javascript'
+        default: javascript
         type: choice
         options:
           - javascript
@@ -16,16 +17,18 @@ on:
           - cpp
           - all
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       smoke_test:
-        description: 'Run fast CodeQL analysis for selected language'
+        description: Run fast CodeQL analysis for selected language
+
         required: false
         default: true
         type: boolean

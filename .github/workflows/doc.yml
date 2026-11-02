@@ -6,15 +6,16 @@ on:
       test_scope:
         description: 'Documentation build scope (smoke: build docs & verify; full: build docs and run full test-doc-ci suite)'
         required: false
-        default: 'smoke'
+        default: smoke
         type: choice
         options:
           - smoke
           - full
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
@@ -49,7 +50,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: 3.x
+
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:

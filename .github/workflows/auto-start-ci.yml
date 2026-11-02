@@ -18,27 +18,31 @@ on:
   workflow_dispatch:
     inputs:
       pr_numbers:
-        description: 'PR numbers to process (e.g. "1" or "1 2", or leave empty to query open PRs)'
+        description: PR numbers to process (e.g. "1" or "1 2", or leave empty to query open PRs)
+
         required: false
-        default: '1'
+        default: 1
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Audit and simulate CI trigger without calling Jenkins or mutating PR labels'
+        description: Audit and simulate CI trigger without calling Jenkins or mutating PR labels
+
         required: false
         default: true
         type: boolean
       max_workload:
-        description: 'Maximum running/queued CI workload'
+        description: Maximum running/queued CI workload
+
         required: false
-        default: '15'
+        default: 15
 
 concurrency: ${{ github.workflow }}
 

@@ -6,20 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       node_version:
-        description: 'Node.js version line to test (e.g., 22, 20, latest-nightly, or all)'
+        description: Node.js version line to test (e.g., 22, 20, latest-nightly, or all)
+
         required: false
-        default: '22'
+        default: 22
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (wpt.fyi upload)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Smoke test WPT reporting without compiling full C++ node binary'
+        description: Smoke test WPT reporting without compiling full C++ node binary
+
         required: false
         default: true
         type: boolean

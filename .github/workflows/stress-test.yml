@@ -19,12 +19,12 @@ on:
       repeat:
         description: Number of times to repeat each test (--repeat)
         required: true
-        default: '1000'
+        default: 1000
         type: string
       test_jobs:
         description: Number of jobs to run in parallel (-j).
         required: true
-        default: '1'
+        default: 1
         type: string
       test_args:
         description: Extra args for tools/test.py, space-separated (e.g. "-t 10 --worker")

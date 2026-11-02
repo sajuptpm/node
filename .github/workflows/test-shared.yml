@@ -116,14 +116,15 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (smoke validation & report), original (full matrix build)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       smoke_test:
-        description: 'Run fast smoke validation rather than 3-hour multi-platform compilation'
+        description: Run fast smoke validation rather than 3-hour multi-platform compilation
+
         required: false
         default: true
         type: boolean
@@ -138,7 +139,8 @@ permissions:
 jobs:
   build-tarball:
     if: (github.event_name == 'pull_request' && github.event.pull_request.draft == false) || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.repository == 'nodejs/node' || vars.ENABLE_SHARED_TESTS == 'true'))
-    name: 'Build slim tarball'
+    name: Build slim tarball
+
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -165,7 +167,8 @@ jobs:
           path: '*.tar.gz'
 
   smoke-shared:
-    name: 'Smoke Shared Libraries Validation'
+    name: Smoke Shared Libraries Validation
+
     if: inputs.smoke_test != false || inputs.mode == 'native' || (github.event_name == 'push' && vars.ENABLE_SHARED_TESTS != 'true')
     needs: build-tarball
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}

@@ -48,14 +48,15 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (GitHub-native summary/artifacts), original (upstream PR creation)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Smoke test tool/dep update and PR metadata generation'
+        description: Smoke test tool/dep update and PR metadata generation
+
         required: false
         default: true
         type: boolean

@@ -63,14 +63,15 @@ on:
       mode:
         description: 'Execution mode: auto (default), native (fast packaging & extraction check), original (make tar & make build-ci)'
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       smoke_test:
-        description: 'Run fast smoke verification rather than multi-hour C++ make build-ci'
+        description: Run fast smoke verification rather than multi-hour C++ make build-ci
+
         required: false
         default: true
         type: boolean

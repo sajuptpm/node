@@ -8,9 +8,10 @@ on:
   workflow_dispatch:
     inputs:
       label:
-        description: 'Label action to test (all, stalled, fast-track, notable-change)'
+        description: Label action to test (all, stalled, fast-track, notable-change)
+
         required: false
-        default: 'all'
+        default: all
         type: choice
         options:
           - all
@@ -18,20 +19,23 @@ on:
           - fast-track
           - notable-change
       target_number:
-        description: 'Target Issue or PR number to test'
+        description: Target Issue or PR number to test
+
         required: false
-        default: '1'
+        default: 1
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
           - native
           - original
       dry_run:
-        description: 'Simulate comment generation without modifying remote issues or PRs'
+        description: Simulate comment generation without modifying remote issues or PRs
+
         required: false
         default: true
         type: boolean
@@ -51,7 +55,8 @@ permissions:
 
 jobs:
   stale-comment:
-    name: 'Stalled Label Comment'
+    name: Stalled Label Comment
+
     permissions:
       issues: write
       pull-requests: write
@@ -115,7 +120,8 @@ jobs:
           if-no-files-found: ignore
 
   fast-track:
-    name: 'Fast-Track Label Comment'
+    name: Fast-Track Label Comment
+
     permissions:
       pull-requests: write
     if: (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_COMMENT_LABELED == 'true') && (github.event.label.name == 'fast-track' || inputs.label == 'fast-track' || inputs.label == 'all')
@@ -178,7 +184,8 @@ jobs:
           if-no-files-found: ignore
 
   notable-change:
-    name: 'Notable Change Label Comment'
+    name: Notable Change Label Comment
+
     permissions:
       pull-requests: write
     if: (github.repository == 'nodejs/node' || github.repository_owner == 'sajuptpm' || github.event_name == 'workflow_dispatch' || vars.ENABLE_COMMENT_LABELED == 'true') && (github.event.label.name == 'notable-change' || inputs.label == 'notable-change' || inputs.label == 'all')

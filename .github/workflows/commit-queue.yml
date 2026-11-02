@@ -15,19 +15,22 @@ on:
   workflow_dispatch:
     inputs:
       candidates:
-        description: 'Candidate PR numbers to evaluate (e.g. "123 456"), or leave empty to discover automatically'
+        description: Candidate PR numbers to evaluate (e.g. "123 456"), or leave empty to discover automatically
+
         required: false
         default: ''
         type: string
       dry_run:
-        description: 'Simulate commit-queue execution without landing or modifying PRs'
+        description: Simulate commit-queue execution without landing or modifying PRs
+
         required: false
         default: true
         type: boolean
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto

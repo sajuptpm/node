@@ -11,29 +11,34 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'Pull Request number to evaluate'
+        description: Pull Request number to evaluate
+
         required: false
-        default: '1'
+        default: 1
         type: string
       is_first_time:
-        description: 'Simulate first-time contributor'
+        description: Simulate first-time contributor
+
         required: false
         default: true
         type: boolean
       simulate_caution:
-        description: 'Simulate AgentScan automation caution flag'
+        description: Simulate AgentScan automation caution flag
+
         required: false
         default: false
         type: boolean
       dry_run:
-        description: 'Simulate guidance without posting comments to GitHub'
+        description: Simulate guidance without posting comments to GitHub
+
         required: false
         default: true
         type: boolean
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto

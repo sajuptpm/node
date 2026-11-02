@@ -9,15 +9,16 @@ on:
       test_scope:
         description: 'Testing scope (smoke: validate release lint toolchains & rules; full: execute live proposal branch linter)'
         required: false
-        default: 'smoke'
+        default: smoke
         type: choice
         options:
           - smoke
           - full
       mode:
-        description: 'Execution mode (auto, native, original)'
+        description: Execution mode (auto, native, original)
+
         required: false
-        default: 'auto'
+        default: auto
         type: choice
         options:
           - auto
