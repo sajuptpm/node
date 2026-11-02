@@ -83,7 +83,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41367072087`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41367072087](https://github.com/sajuptpm/node/actions/runs/41367072087)
+- **Trigger**: `workflow_dispatch` (inputs: `publish_results: false`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 34 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `Scorecard analysis` | `success` (`✓`) | 34s | `ubuntu-latest` | Hardened runner, checked out code, verified SARIF schema, rendered step summary, uploaded SARIF artifact & code scanning results |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `SARIF file` | ~2 KB | `results.sarif` (OpenSSF Scorecard SARIF v2.1.0 report) |
 
 ---
 
