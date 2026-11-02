@@ -79,7 +79,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `4136544246` (https://github.com/sajuptpm/node/actions/runs/41366544246)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41366544246](https://github.com/sajuptpm/node/actions/runs/41366544246)
+- **Trigger**: `workflow_dispatch` (inputs: `item_type: pull_request`, `item_number: 1234`, `item_title: fs: implement native async file watchers`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 9 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `Notify on Review Wanted` | `success` (`✓`) | 9s | `ubuntu-latest` | Resolved mode to native, formatted PR review notice for PR #1234, published summary, and uploaded artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `review-wanted-report` | 408 bytes | `reports/review-wanted-notification.md` (formatted review request details and URL) |
 
 ---
 
