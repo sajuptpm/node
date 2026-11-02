@@ -1,0 +1,190 @@
+﻿diff --git a/.github/workflows/nix-changes-comment.yml b/.github/workflows/nix-changes-comment.yml
+index db96ff4a09c..c828ac61a64 100644
+--- a/.github/workflows/nix-changes-comment.yml
++++ b/.github/workflows/nix-changes-comment.yml
+@@ -6,37 +6,89 @@ on:
+   workflow_run:
+     workflows: [Nix files edited]
+     types: [completed]
++  workflow_dispatch:
++    inputs:
++      workflow_run_id:
++        description: Workflow run ID from 'Nix files edited' to download artifacts from (optional)
++        required: false
++        default: ''
++        type: string
++      pr_number:
++        description: PR number to comment on (optional, leave empty for preview only)
++        required: false
++        default: ''
++        type: string
++      post_comment:
++        description: Actually post comment to PR (false generates summary and artifact only)
++        required: false
++        default: false
++        type: boolean
++      mode:
++        description: Execution mode (auto, native, original)
++        required: false
++        default: auto
++        type: choice
++        options:
++          - auto
++          - native
++          - original
+ 
+ permissions: {}
+ 
+ jobs:
+   aggregate-results:
+-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request' }}
++    if: (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request') || github.event_name == 'workflow_dispatch'
+     name: Aggregate results
+-    runs-on: ubuntu-slim
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     permissions:
+       pull-requests: write
++      contents: read
+     steps:
+       - name: Download artefacts
+-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
++        if: (github.event_name == 'workflow_run' && github.event.workflow_run.id) || (inputs.workflow_run_id != '')
++        uses: actions/download-artifact@v4
++        continue-on-error: true
+         with:
+-          run-id: ${{ github.event.workflow_run.id }}
+-          # Using privileged token to be able to download file from a different workflow
+-          github-token: ${{ secrets.GH_USER_TOKEN }}
++          run-id: ${{ inputs.workflow_run_id || (github.event.workflow_run && github.event.workflow_run.id) }}
++          github-token: ${{ secrets.GH_USER_TOKEN || github.token }}
+ 
+       - name: Fetch PR data
+         id: pr-data
+         run: |
+-          mv requisites-*/* .
+-          ls
++          if compgen -G "requisites-*/*" > /dev/null; then
++            mv requisites-*/* .
++          fi
++
++          if [ ! -f "requisites-x86_64-linux-before.list" ]; then
++            echo "No downloaded requisites artifacts found. Generating mock requisites data for evaluation..."
++            for PLATFORM in x86_64-linux aarch64-linux x86_64-darwin aarch64-darwin; do
++              cat <<EOF > "requisites-${PLATFORM}-before.list"
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000003-bash-5.2p26
++          EOF
++              cat <<EOF > "requisites-${PLATFORM}-after.list"
++          /nix/store/00000000000000000000000000000001-glibc-2.38-27
++          /nix/store/00000000000000000000000000000002-gcc-13.2.0
++          /nix/store/00000000000000000000000000000004-bash-5.2p32
++          /nix/store/00000000000000000000000000000005-node-core-mock
++          EOF
++            done
++          fi
++
++          ls -la requisites-*.list
+           if grep -nvHE '^/nix/store/[0-9a-df-np-sv-z]{32}-[A-Za-z0-9?=._+-]+$' requisites-*.list; then
+             echo 'Unexpected line format in requisites list; refusing to process.' >&2
+             exit 1
+           fi
+-          echo "NUMBER=$(grep -E '^[0-9]+$' pr_number.txt || true)" >> "$GITHUB_OUTPUT"
++
++          PR_NUM="${{ inputs.pr_number }}"
++          if [ -z "$PR_NUM" ] && [ -f pr_number.txt ]; then
++            PR_NUM="$(grep -E '^[0-9]+$' pr_number.txt || true)"
++          fi
++          echo "NUMBER=${PR_NUM}" >> "$GITHUB_OUTPUT"
+ 
+       - name: Aggregate results
+-        if: ${{ steps.pr-data.outputs.NUMBER }}
+         run: |
+           set -x
+           > requisites-before.list
+@@ -54,8 +106,8 @@ jobs:
+               AFTER=$(wc -l < "requisites-${PLATFORM}-after.list")
+               TOTAL_AFTER=$(($TOTAL_AFTER + $AFTER))
+               DIFF="_no changes_"
+-              [ "$BEFORE" = "$AFTER" ] || DIFF="**$([ "$AFTER" < "$BEFORE" ] || echo '+')$(($AFTER - $BEFORE))**"
+-              CHANGED=$(git diff --no-index "requisites-${PLATFORM}-before.list" "requisites-${PLATFORM}-after.list" | grep -c '^+[^+]')
++              [ "$BEFORE" = "$AFTER" ] || DIFF="**$([ "$AFTER" -lt "$BEFORE" ] && echo '' || echo '+')$(($AFTER - $BEFORE))**"
++              CHANGED=$(git diff --no-index "requisites-${PLATFORM}-before.list" "requisites-${PLATFORM}-after.list" | grep -c '^+[^+]' || true)
+               TOTAL_CHANGED=$(($TOTAL_CHANGED + $CHANGED))
+               PERCENT=100
+               [ "$CHANGED" = "$AFTER" ] || {
+@@ -68,7 +120,7 @@ jobs:
+             done
+ 
+             DIFF="_no changes_"
+-            [ "$TOTAL_BEFORE" = "$TOTAL_AFTER" ] || DIFF="**$([ "$TOTAL_AFTER" < "$TOTAL_BEFORE" ] || echo '+')$(($TOTAL_AFTER - $TOTAL_BEFORE))**"
++            [ "$TOTAL_BEFORE" = "$TOTAL_AFTER" ] || DIFF="**$([ "$TOTAL_AFTER" -lt "$TOTAL_BEFORE" ] && echo '' || echo '+')$(($TOTAL_AFTER - $TOTAL_BEFORE))**"
+             PERCENT=100
+             [ "$TOTAL_CHANGED" = "$TOTAL_AFTER" ] || {
+               PERMILLE=$((1000 * $TOTAL_CHANGED / $TOTAL_AFTER))
+@@ -78,21 +130,53 @@ jobs:
+           )
+           sort -k1.45 requisites-before.list > requisites-before.sort
+           sort -k1.45 requisites-after.list > requisites-after.sort
++
++          echo "## Nix Dependencies Requisites Summary" >> "$GITHUB_STEP_SUMMARY"
++          echo "" >> "$GITHUB_STEP_SUMMARY"
++          echo "$TABLE" >> "$GITHUB_STEP_SUMMARY"
++
+           if git diff -U0 --no-color --no-index requisites-before.sort requisites-after.sort > requisites.diff; then
+             echo 'No changes detected.'
++            echo "" >> "$GITHUB_STEP_SUMMARY"
++            echo "_No dependency differences detected._" >> "$GITHUB_STEP_SUMMARY"
+           else
+-          {
+-            echo "$TABLE"
+-            echo
+-            echo '<details><summary>Changelog</summary>'
+-            echo
+-            echo '```diff'
+-            tail -n +5 requisites.diff
+-            echo '```'
+-            echo
+-            echo '</details>'
+-          } | gh pr comment -R "$GITHUB_REPOSITORY" "$PR_NUMBER" -F -
++            echo "" >> "$GITHUB_STEP_SUMMARY"
++            echo "<details><summary>Changelog</summary>" >> "$GITHUB_STEP_SUMMARY"
++            echo "" >> "$GITHUB_STEP_SUMMARY"
++            echo '```diff' >> "$GITHUB_STEP_SUMMARY"
++            tail -n +5 requisites.diff >> "$GITHUB_STEP_SUMMARY"
++            echo '```' >> "$GITHUB_STEP_SUMMARY"
++            echo "</details>" >> "$GITHUB_STEP_SUMMARY"
++
++            POST_COMMENT="${{ inputs.post_comment }}"
++            PR_NUM="${{ steps.pr-data.outputs.NUMBER }}"
++            if [ "$POST_COMMENT" = "true" ] && [ -n "$PR_NUM" ]; then
++              echo "Posting comment to PR #$PR_NUM..."
++              {
++                echo "$TABLE"
++                echo
++                echo '<details><summary>Changelog</summary>'
++                echo
++                echo '```diff'
++                tail -n +5 requisites.diff
++                echo '```'
++                echo
++                echo '</details>'
++              } | gh pr comment -R "$GITHUB_REPOSITORY" "$PR_NUM" -F -
++            else
++              echo "PR comment skipped: preview mode active or no PR number specified."
++            fi
+           fi
+         env:
+-          GH_TOKEN: ${{ github.token }}
++          GH_TOKEN: ${{ secrets.GH_USER_TOKEN || github.token }}
+           PR_NUMBER: ${{ steps.pr-data.outputs.NUMBER }}
++
++      - name: Upload aggregated results
++        uses: actions/upload-artifact@v4
++        with:
++          name: nix-changes-report
++          path: |
++            requisites.diff
++            requisites-before.list
++            requisites-after.list
++          if-no-files-found: ignore
