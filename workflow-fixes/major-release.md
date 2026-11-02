@@ -79,7 +79,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41365652196`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41365652196](https://github.com/sajuptpm/node/actions/runs/41365652196)
+- **Trigger**: `workflow_dispatch` (inputs: `force_run: true`, `create_issue: false`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 5 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `create-issue` | `success` (`✓`) | 5s | `ubuntu-latest` | Retrieved schedule for `v27` (release date: `2027-04-22`, cutoff date: `2027-03-22`), generated step summary, and uploaded announcement artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `major-release-announcement` | 477 bytes | `reports/major-release-announcement.md` (complete SemVer-major reminder announcement body) |
 
 ---
 
