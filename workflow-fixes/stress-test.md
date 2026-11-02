@@ -76,7 +76,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41367794175`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41367794175](https://github.com/sajuptpm/node/actions/runs/41367794175)
+- **Trigger**: `workflow_dispatch` (inputs: `test_path: test/parallel/test-debugger-break.js`, `os: ubuntu-latest`, `repeat: 5`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 17 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `stress-test` | `success` (`✓`) | 17s | `ubuntu-latest` | Checked out repository, validated target test `test/parallel/test-debugger-break.js`, executed native smoke run with Node.js runtime, rendered summary table, and uploaded artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `stress-test-report` | 353 bytes | `reports/stress-test-report.md` (diagnostic configuration, test path, and smoke execution summary) |
 
 ---
 
