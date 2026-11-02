@@ -73,7 +73,28 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41369940119`](https://github.com/sajuptpm/node/actions/runs/41369940119)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41369940119](https://github.com/sajuptpm/node/actions/runs/41369940119)
+- **Trigger Type**: `workflow_dispatch` (`mode=native`, `dry_run=true`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `14s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Run actions/checkout@v4` | Completed | 2s | Checked out repository root at ref `main` |
+| `Check and download new OpenSSL version` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Create PR with first commit` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Regenerate platform specific files` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Add second commit` | Skipped | 0s | Bypassed in native dry-run mode |
+| `Native OpenSSL Version Audit & Sanity Check` | Completed | 3s | Inspected vendored version (`3.5.8`), queried GitHub API for upstream tag (`openssl-3.5.9`), and validated `tools/dep_updaters/update-openssl.sh` |
+| `Upload OpenSSL Report Artifact` | Completed | 2s | Uploaded `reports/openssl-update-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `openssl-update-report`
+  - Contents: `reports/openssl-update-report.md` (detailed markdown report containing vendored OpenSSL version, upstream release tag, updater script verification, and audit summary)
 
 ---
 
