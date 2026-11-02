@@ -70,7 +70,30 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+- **Run ID**: [`41369034867`](https://github.com/sajuptpm/node/actions/runs/41369034867)
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41369034867](https://github.com/sajuptpm/node/actions/runs/41369034867)
+- **Trigger Type**: `workflow_dispatch` (`test_scope=smoke`, `mode=native`)
+- **Outcome**: `success` (`completed`)
+- **Duration**: `13s`
+
+### Execution Timeline Table
+| Step / Job Name | Status | Duration | Details |
+| :--- | :--- | :--- | :--- |
+| `Set up job` | Completed | 2s | Runner initialized on standard `ubuntu-latest` |
+| `Run actions/checkout@v4` | Completed | 2s | Checked out repository root at ref `main` |
+| `Install Clang 19` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Install Rust 1.88` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up Python 3.14` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Set up sccache` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Build (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Test (Original Mode)` | Skipped | 0s | Bypassed in smoke / native mode |
+| `Native QUIC Verification` | Completed | 3s | Audited `ngtcp2` (`1.25.0`), `nghttp3` (`1.18.0`), `configure.py --experimental-quic`, and QUIC source bindings |
+| `Upload QUIC Report Artifact` | Completed | 2s | Uploaded `reports/quic-test-report.md` |
+| `Complete job` | Completed | 0s | Clean exit code 0 |
+
+### Generated Artifacts
+- **Artifact Name**: `quic-test-report`
+  - Contents: `reports/quic-test-report.md` (detailed markdown report containing vendored ngtcp2 and nghttp3 versions, configure options, and source files)
 
 ---
 
