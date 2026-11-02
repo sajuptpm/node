@@ -1,108 +1,13 @@
 ﻿diff --git a/.github/workflows/stale.yml b/.github/workflows/stale.yml
-index eb5921edb93..44ed5b9f20c 100644
+index 44ed5b9f20c..b9e8ae5868a 100644
 --- a/.github/workflows/stale.yml
 +++ b/.github/workflows/stale.yml
-@@ -1,8 +1,33 @@
- name: Close stale
-+
- on:
-   workflow_dispatch:
-+    inputs:
-+      dry_run:
-+        description: Run in dry-run mode without modifying issues or PRs
-+        required: false
-+        default: true
-+        type: boolean
-+      days_before_stale:
-+        description: Inactive days before marking stale
-+        required: false
-+        default: '90'
-+        type: string
-+      days_before_close:
-+        description: Inactive days before closing stale item
-+        required: false
-+        default: '30'
-+        type: string
-+      mode:
-+        description: Execution mode (auto, native, original)
-+        required: false
-+        default: auto
-+        type: choice
-+        options:
-+          - auto
-+          - native
-+          - original
-   schedule:
--    # Run every day at 1:00 AM UTC.
-     - cron: 0 1 * * *
- 
- # yamllint disable rule:empty-lines
-@@ -27,17 +52,18 @@ permissions:
- jobs:
-   stale:
-     permissions:
--      issues: write  # for actions/stale to close stale issues
--      pull-requests: write  # for actions/stale to close stale PRs
--      actions: write  # for actions/stale to cache stale saved state
--    if: github.repository == 'nodejs/node'
--    runs-on: ubuntu-slim
-+      issues: write
-+      pull-requests: write
-+      actions: write
-+    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_STALE == 'true'
-+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-     steps:
--      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93  # v11.0.0
-+      - name: Close Stale Issues and Pull Requests
-+        uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93  # v11.0.0
-         with:
-           repo-token: ${{ secrets.GITHUB_TOKEN }}
--          days-before-stale: 90
--          days-before-close: 30
-+          days-before-stale: ${{ inputs.days_before_stale || 90 }}
-+          days-before-close: ${{ inputs.days_before_close || 30 }}
-           stale-issue-label: stale
-           exempt-issue-labels: never-stale, confirmed-bug
-           close-issue-message: ${{ format(env.CLOSE_MESSAGE, 'issue') }}
-@@ -46,6 +72,39 @@ jobs:
-           exempt-pr-labels: never-stale
-           close-pr-message: ${{ format(env.CLOSE_MESSAGE, 'pull request') }}
+@@ -74,7 +74,7 @@ jobs:
            stale-pr-message: ${{ format(env.WARN_MESSAGE, 'pull request') }}
--          # max requests it will send per run to the GitHub API before it deliberately exits to avoid hitting API rate limits
--          operations-per-run: 2500
-+          operations-per-run: ${{ github.event_name == 'workflow_dispatch' && 100 || 2500 }}
+           operations-per-run: ${{ github.event_name == 'workflow_dispatch' && 100 || 2500 }}
            remove-stale-when-updated: true
-+          dry-run: ${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}
-+
-+      - name: Generate Stale Audit Report & Summary
-+        run: |
-+          mkdir -p reports
-+          DRY_RUN="${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}"
-+          STALE_DAYS="${{ inputs.days_before_stale || 90 }}"
-+          CLOSE_DAYS="${{ inputs.days_before_close || 30 }}"
-+          MODE="${{ inputs.mode || 'auto' }}"
-+
-+          cat <<EOF > reports/stale-audit-report.md
-+          # Stale Processing Audit Report
-+
-+          - **Repository**: \`${GITHUB_REPOSITORY}\`
-+          - **Trigger**: \`${GITHUB_EVENT_NAME}\`
-+          - **Mode**: \`${MODE}\`
-+          - **Dry Run**: \`${DRY_RUN}\`
-+          - **Days Before Stale**: \`${STALE_DAYS}\`
-+          - **Days Before Close**: \`${CLOSE_DAYS}\`
-+          - **Issue Exemptions**: \`never-stale\`, \`confirmed-bug\`
-+          - **PR Exemptions**: \`never-stale\`
-+          - **Status**: Audit and stale processing completed successfully.
-+          EOF
-+
-+          echo "## Stale Processing Summary" >> "$GITHUB_STEP_SUMMARY"
-+          echo "" >> "$GITHUB_STEP_SUMMARY"
-+          cat reports/stale-audit-report.md >> "$GITHUB_STEP_SUMMARY"
-+
-+      - name: Upload Stale Audit Artifact
-+        uses: actions/upload-artifact@v4
-+        with:
-+          name: stale-audit-report
-+          path: reports/stale-audit-report.md
-+          if-no-files-found: ignore
+-          dry-run: ${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}
++          debug-only: ${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}
+ 
+       - name: Generate Stale Audit Report & Summary
+         run: |

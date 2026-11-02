@@ -74,7 +74,7 @@ jobs:
           stale-pr-message: ${{ format(env.WARN_MESSAGE, 'pull request') }}
           operations-per-run: ${{ github.event_name == 'workflow_dispatch' && 100 || 2500 }}
           remove-stale-when-updated: true
-          dry-run: ${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}
+          debug-only: ${{ inputs.dry_run == true || (inputs.mode == 'native') || (github.repository != 'nodejs/node' && inputs.dry_run != false) }}
 
       - name: Generate Stale Audit Report & Summary
         run: |
