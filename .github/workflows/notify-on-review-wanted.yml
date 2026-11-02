@@ -1,9 +1,39 @@
 name: Notify on Review Wanted
+
 on:
   issues:
     types: [labeled]
   pull_request_target:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      item_type:
+        description: Target item type (pull_request or issue)
+        required: false
+        default: pull_request
+        type: choice
+        options:
+          - pull_request
+          - issue
+      item_number:
+        description: Item number to simulate review request
+        required: false
+        default: '1234'
+        type: string
+      item_title:
+        description: Item title for notification preview
+        required: false
+        default: 'fs: implement native async file watchers'
+        type: string
+      mode:
+        description: Execution mode (auto, native, original)
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - native
+          - original
 
 permissions:
   contents: read
@@ -11,29 +41,71 @@ permissions:
 jobs:
   notifyOnReviewWanted:
     name: Notify on Review Wanted
-    if: github.repository == 'nodejs/node' && github.event.label.name == 'review wanted'
-    # cannot use ubuntu-slim here because rtCamp/action-slack-notify is dockerized
-    runs-on: ubuntu-24.04-arm
+    if: (github.repository == 'nodejs/node' && github.event.label.name == 'review wanted') || github.event_name == 'workflow_dispatch' || (vars.ENABLE_REVIEW_WANTED == 'true' && github.event.label.name == 'review wanted')
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
     steps:
+      - name: Resolve Notification Mode
+        id: mode-resolver
+        env:
+          INPUT_MODE: ${{ inputs.mode || vars.WORKFLOW_MODE || 'auto' }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          if [ "$INPUT_MODE" = "original" ]; then
+            echo "selected_mode=original" >> "$GITHUB_OUTPUT"
+          elif [ "$INPUT_MODE" = "native" ]; then
+            echo "selected_mode=native" >> "$GITHUB_OUTPUT"
+          else
+            if [ -n "$SLACK_WEBHOOK" ]; then
+              echo "selected_mode=original" >> "$GITHUB_OUTPUT"
+            else
+              echo "selected_mode=native" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
       - name: Determine PR or Issue
         id: define-message
         env:
           TITLE_ISSUE: ${{ github.event.issue.title }}
           TITLE_PR: ${{ github.event.pull_request.title }}
         run: |
-          if [[ -n "${{ github.event.pull_request.number }}" ]]; then
+          ITEM_TYPE="${{ inputs.item_type }}"
+          MANUAL_NUM="${{ inputs.item_number }}"
+          MANUAL_TITLE="${{ inputs.item_title }}"
+
+          if [ -n "${{ github.event.pull_request.number }}" ] || [ "$ITEM_TYPE" = "pull_request" ]; then
             number="${{ github.event.pull_request.number }}"
+            [ -z "$number" ] && number="$MANUAL_NUM"
+            [ -z "$number" ] && number="1"
+
+            title="${{ github.event.pull_request.title }}"
+            [ -z "$title" ] && title="$MANUAL_TITLE"
+            [ -z "$title" ] && title="Node.js Pull Request Review Request"
+
             link="https://github.com/${{ github.repository }}/pull/$number"
             echo "message=The PR (#$number) requires review from Node.js maintainers. See: $link" >> "$GITHUB_OUTPUT"
-            echo "title=$TITLE_PR" >> "$GITHUB_OUTPUT"
+            echo "title=$title" >> "$GITHUB_OUTPUT"
+            echo "kind=pull_request" >> "$GITHUB_OUTPUT"
+            echo "number=$number" >> "$GITHUB_OUTPUT"
+            echo "link=$link" >> "$GITHUB_OUTPUT"
           else
             number="${{ github.event.issue.number }}"
+            [ -z "$number" ] && number="$MANUAL_NUM"
+            [ -z "$number" ] && number="1"
+
+            title="${{ github.event.issue.title }}"
+            [ -z "$title" ] && title="$MANUAL_TITLE"
+            [ -z "$title" ] && title="Node.js Issue Review Request"
+
             link="https://github.com/${{ github.repository }}/issues/$number"
             echo "message=The issue (#$number) requires review from Node.js maintainers. See: $link" >> "$GITHUB_OUTPUT"
-            echo "title=$TITLE_ISSUE" >> "$GITHUB_OUTPUT"
+            echo "title=$title" >> "$GITHUB_OUTPUT"
+            echo "kind=issue" >> "$GITHUB_OUTPUT"
+            echo "number=$number" >> "$GITHUB_OUTPUT"
+            echo "link=$link" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Slack Notification
+      - name: Original Mode - Slack Notification
+        if: steps.mode-resolver.outputs.selected_mode == 'original'
         uses: rtCamp/action-slack-notify@33ca3be66c6f378fe1610fd1d5258632dbed5e58  # v2.4.0
         env:
           MSG_MINIMAL: actions url
@@ -43,3 +115,29 @@ jobs:
           SLACK_MESSAGE: ${{ steps.define-message.outputs.message }}
           SLACK_USERNAME: nodejs-bot
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Native Mode - Summary & Report Generation
+        run: |
+          mkdir -p reports
+          cat <<EOF > reports/review-wanted-notification.md
+          # Review Wanted Notification
+
+          - **Event Trigger**: \`${{ github.event_name }}\`
+          - **Mode**: \`${{ steps.mode-resolver.outputs.selected_mode }}\`
+          - **Item Type**: \`${{ steps.define-message.outputs.kind }}\`
+          - **Item Number**: \`#${{ steps.define-message.outputs.number }}\`
+          - **Title**: ${{ steps.define-message.outputs.title }}
+          - **URL**: ${{ steps.define-message.outputs.link }}
+          - **Notification Message**: ${{ steps.define-message.outputs.message }}
+          EOF
+
+          echo "## Review Wanted Notification Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat reports/review-wanted-notification.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Notification Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: review-wanted-report
+          path: reports/review-wanted-notification.md
+          if-no-files-found: ignore
