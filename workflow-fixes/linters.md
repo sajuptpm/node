@@ -82,7 +82,26 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41365220878`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41365220878](https://github.com/sajuptpm/node/actions/runs/41365220878)
+- **Trigger**: `workflow_dispatch` (inputs: `test_scope: smoke`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: ~45 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `lint-yaml` | `success` (`✓`) | 11s | `ubuntu-latest` | Executed Python/yamllint against repository YAML files |
+| `lint-codeowners` | `success` (`✓`) | 18s | `ubuntu-latest` | Verified CODEOWNERS formatting & team references |
+| `lint-readme` | `success` (`✓`) | 7s | `ubuntu-latest` | Verified README table integrity |
+| `lint-sh` | `success` (`✓`) | 9s | `ubuntu-latest` | Executed shellcheck across repository bash/sh scripts |
+| `lint-summary` | `success` (`✓`) | 4s | `ubuntu-latest` | Consolidated linter status report into `$GITHUB_STEP_SUMMARY` & artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `linters-report` | ~4 KB | `linters-summary.md` and individual linter run summaries |
 
 ---
 
