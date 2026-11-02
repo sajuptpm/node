@@ -78,7 +78,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41367539033`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41367539033](https://github.com/sajuptpm/node/actions/runs/41367539033)
+- **Trigger**: `workflow_dispatch` (inputs: `dry_run: true`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 6 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `stale` | `success` (`✓`) | 6s | `ubuntu-latest` | Executed actions/stale in `debug-only` dry-run mode, evaluated issues and PRs without mutations, output step summary, and uploaded artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `stale-audit-report` | ~1 KB | `reports/stale-audit-report.md` (complete execution configuration and threshold parameters) |
 
 ---
 
