@@ -76,7 +76,22 @@ flowchart TD
 
 ## Section 5: Live Test Verification Details
 
-*(Pending live GitHub Actions dispatch execution — will be populated with exact run details immediately following dispatch).*
+### Test Run Overview
+- **Run ID**: `41368120464`
+- **Run URL**: [https://github.com/sajuptpm/node/actions/runs/41368120464](https://github.com/sajuptpm/node/actions/runs/41368120464)
+- **Trigger**: `workflow_dispatch` (inputs: `test_scope: smoke`, `mode: native`)
+- **Outcome**: `success` (`✓`)
+- **Total Duration**: 14 seconds
+
+### Job Execution Breakdown
+| Job Name | Status | Duration | Runner Pool | Details / Output |
+| :--- | :--- | :--- | :--- | :--- |
+| `test-internet` | `success` (`✓`) | 14s | `ubuntu-latest` | Checked out code, validated DNS lookup (`nodejs.org`), verified HTTP response code (301), audited 38 internet test files, rendered summary, and uploaded artifact |
+
+### Generated Artifacts
+| Artifact Name | Size | Contents |
+| :--- | :--- | :--- |
+| `test-internet-report` | 387 bytes | `reports/test-internet-report.md` (live network resolution metrics, HTTP code, and test counts) |
 
 ---
 
