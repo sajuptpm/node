@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""
+add-public-oss-risk-sheet.py - Adds the 'public_oss_risk_assessment' sheet to
+nodejs_pipeline_result.xlsx, node_pipeline_result.xlsx, and pipeline_result.xlsx
+documenting the exact Public OSS Model Impact, Public OSS Model Risk,
+Mitigation Strategy, and Recommended Solution for each pipeline.
+"""
+
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+HEADERS = [
+    "#",
+    "Pipeline Name",
+    "Restricted Tool / Infra (Vendor / Upstream)",
+    "Alternate Approach Implemented (Dual-Mode)",
+    "Public OSS Model Impact",
+    "Public OSS Model Risk",
+    "Residual Risk Level",
+    "Public OSS Mitigation Strategy",
+    "Recommended Enterprise Solution",
+    "Release Viability Verdict"
+]
+
+ROWS = [
+    (
+        1,
+        "auto-start-ci.yml & commit-queue.yml",
+        "OpenJS Foundation Dedicated Jenkins Farm (ci.nodejs.org)",
+        "Native Simulation Mode in Dual-Mode; core testing delegated to native GitHub Actions matrix workflows.",
+        "External open-source contributors cannot trigger upstream Jenkins CI or use automated landing queues; all CI feedback is handled natively on GitHub PR checks.",
+        "Public contributors cannot test cross-platform changes on exotic architectures (AIX, s390x, ppc64le, SmartOS, Windows ARM) prior to merging.",
+        "Low (for standard enterprise OS: Linux/macOS/Win); High (if distributing to AIX/zOS)",
+        "Enforce standard GitHub Actions multi-platform matrix (Linux, macOS, Windows) as required status checks for all public PRs.",
+        "Treat workflows as non-essential for enterprise release (Column 33: NO). Enforce GitHub branch protection rules requiring GitHub Actions test matrices to pass before merging.",
+        "Non-blocking / Redundant for Release"
+    ),
+    (
+        2,
+        "build-tarball.yml, coverage-linux.yml, test-shared.yml",
+        "GitHub Managed ARM64 Runners (ubuntu-24.04-arm)",
+        "Dynamic runner fallback: runs-on: ${{ vars.ARM_RUNNER_LABEL || vars.RUNNER_LABEL || 'ubuntu-latest' }}. Defaults to free standard ubuntu-latest x86_64.",
+        "Source tarballs and release binaries are published publicly to GitHub Releases. Avoids per-minute runner charges ($0.005–$0.010/min) against Enterprise billing.",
+        "Unverified AArch64 Binary Execution: If ARM64 binaries are distributed publicly but only compiled/tested on x86_64 via fallback emulation, native ARM users (AWS Graviton, Apple Silicon) may encounter runtime bugs.",
+        "Medium",
+        "Use QEMU user-mode emulation for smoke-testing ARM instruction sets on x86_64 runners, or cross-compile via Clang (--dest-cpu=arm64).",
+        "For official ARM64 binary distribution, attach a free self-hosted ARM64 runner (e.g. Oracle Cloud Free Tier 4-core Ampere A1 instance) and configure vars.ARM_RUNNER_LABEL.",
+        "Viable for GA (via Self-Hosted ARM or standard x86 fallback)"
+    ),
+    (
+        3,
+        "42 Upstream Pipelines (e.g. test-linux.yml, linters.yml, doc.yml, build-tarball.yml)",
+        "OpenJS Foundation Custom Runners (ubuntu-slim)",
+        "Dynamic runner expression: runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}. Defaulting to standard GitHub-hosted ubuntu-latest.",
+        "Public contributors and automated builds run on GitHub's free standard runner pool without requiring dedicated self-hosted VM infrastructure ($0 maintenance).",
+        "Public PR Concurrency Starvation: Spikes in community PRs or automated CI runs can saturate GitHub's 20–60 concurrent job limit for public repos, causing release builds to queue.",
+        "Low",
+        "Dual-Mode guards automatic push triggers on forks (vars.ENABLE_TEST_LINUX). Configure repository settings to require approval for first-time contributors before running Actions.",
+        "Retain standard ubuntu-latest ($0 cost). If enterprise release SLAs require dedicated concurrency, deploy Actions Runner Controller (ARC) on an internal Kubernetes cluster.",
+        "Viable for GA (Core Release Foundation)"
+    ),
+    (
+        4,
+        "build-shared.yml, test-shared.yml, benchmark.yml, nix-changes.yml",
+        "Cachix Managed Nix Binary Cache (nodejs.cachix.org)",
+        "Secret guard checks CACHIX_AUTH_TOKEN. If absent, Cachix push is bypassed; builds compile natively via Clang/GCC and cache via actions/cache@v4.",
+        "Open-source contributors who build via Nix must compile derivations locally, eliminating reliance on private upstream Cachix authentication tokens.",
+        "Extended Build Times: Nix builds on public forks may experience cache misses, increasing build times and potentially hitting GitHub's 6-hour execution timeout limit.",
+        "Low",
+        "Standard Node.js distributions do NOT depend on Nix; release tarballs compile cleanly via standard configure.py --shared && make.",
+        "Exclude Nix workflows from release blocking gates. Build shared release libraries (libnode.so) via standard Linux Makefiles and package via RPM/DEB.",
+        "Non-blocking / Optional for Release"
+    ),
+    (
+        5,
+        "coverage-linux.yml, coverage-linux-without-intl.yml, coverage-windows.yml",
+        "Codecov Coverage Analysis Platform",
+        "Generates LCOV and Cobertura XML locally via gcovr, formats summary markdown directly into $GITHUB_STEP_SUMMARY, and uploads coverage-report artifacts.",
+        "Test coverage summaries and downloadable reports are visible publicly to all community contributors in GitHub Actions run summaries and artifacts.",
+        "Public Surface Area Exposure: Public disclosure of low-coverage code paths allows external attackers to identify weakly-tested areas in the codebase to target zero-day vulnerability research.",
+        "Negligible",
+        "Enforce mandatory code coverage thresholds (>80%) on release branches before publishing releases. Keep coverage reports in GitHub Step Summary.",
+        "Native Step Summaries satisfy enterprise QA and SOC2 audit requirements without third-party tokens. If web UI is desired, link a free OSS Codecov account.",
+        "Viable for GA (Native Coverage Gate)"
+    ),
+    (
+        6,
+        "notify-on-push.yml, notify-on-review-wanted.yml, post-release.yml",
+        "Slack Enterprise Team Messaging",
+        "Secret guard detects SLACK_WEBHOOK. If absent, formats rich notification cards into $GITHUB_STEP_SUMMARY and uploads post-release-report artifacts.",
+        "Release announcements and build status are published publicly via GitHub Releases, Discussions, and Step Summaries rather than closed internal Slack channels.",
+        "Accidental Secret Exposure: If maintainers attempt to configure Slack webhooks on public repos, improperly configured workflows could expose webhook URLs in public PR logs.",
+        "Low",
+        "Dual-Mode architecture never requires Slack secrets on forks. Rely on native GitHub notifications and public GitHub Release announcements.",
+        "Use GitHub native Release Announcements and Discussions. For internal team alerts, configure a free webhook to Discord, Zulip, or Teams.",
+        "Viable for GA (Using GitHub Native Announcements)"
+    ),
+    (
+        7,
+        "daily-wpt-fyi.yml",
+        "Web Platform Tests Ingestion Server (wpt.fyi)",
+        "Executes Web Platform Tests locally against Node.js/Undici, collects test passes/failures into JSON/HTML reports, and uploads them to Actions Artifacts (wpt-report).",
+        "Public forks validate WPT web standards compliance locally without attempting unauthorized uploads to the public wpt.fyi consortium dashboard.",
+        "Zero Functional Release Risk: WPT dashboard submission is an upstream public relations/metrics activity, not a release prerequisite.",
+        "Negligible",
+        "Local test pass/fail logs verify WPT compliance within pipeline artifacts. Validate web protocols locally via test-internet.yml.",
+        "Mark workflow as redundant for enterprise release (Column 33: NO).",
+        "Non-blocking / Redundant for Release"
+    ),
+    (
+        8,
+        "22 Upstream Pipelines (e.g. create-release-proposal.yml, update-openssl.yml, update-v8.yml)",
+        "Upstream Maintainer Bot Accounts (GH_USER_TOKEN)",
+        "Built-in repository ${{ secrets.GITHUB_TOKEN }} with explicit granular permissions (contents: write, pull-requests: write, actions: write).",
+        "All release proposals, version bumps, and branch creations are performed transparently via $GITHUB_TOKEN without requiring paid bot user seats.",
+        "Public PR Permission Misconfiguration: If repository-wide $GITHUB_TOKEN permissions are set to 'write' instead of 'read', public fork PRs could exploit token permissions.",
+        "Medium",
+        "Strictly declare least-privilege permissions at individual job level (permissions: contents: write only on release step). Require 2-person reviews on release branches.",
+        "Enable 'Allow GitHub Actions to create and approve pull requests' in repo settings, or configure a scoped GitHub App (e.g. enterprise-release-bot[bot]).",
+        "Viable for GA (Least-Privilege Scoped)"
+    ),
+    (
+        9,
+        "build-tarball.yml, coverage-linux.yml, test-internet.yml",
+        "Mozilla sccache Cloud Object Storage (S3 / GCS / Azure)",
+        "GitHub Actions native Cache (actions/cache@v4 with 10 GB free cache storage per repository) or ephemeral compilation on standard runners.",
+        "Build caches are scoped to repository branch hierarchies natively on GitHub without external cloud storage credentials or network egress billing.",
+        "Public Cache Poisoning / Cache Eviction: If public PR branches pollute cache keys, cache size could exceed 10 GB, evicting main release branch caches.",
+        "Low",
+        "Strictly scope cache keys to toolchain hashes and node_version.h (e.g. sccache-main-${{ hashFiles('configure.py') }}). Public PR caches cannot overwrite main branch caches.",
+        "Use GitHub Actions native cache (actions/cache@v4). It is 100% free, requires zero cloud provider setup, and enforces branch-level cache isolation.",
+        "Viable for GA (Native Cache Isolation)"
+    ),
+    (
+        10,
+        "codeql.yml & scorecard.yml",
+        "Security & Supply Chain Audits (GHAS / Scorecard)",
+        "GitHub CodeQL analysis (github/codeql-action@v3) and OpenSSF Scorecard running in audit mode, uploading SARIF to GitHub Security tab.",
+        "Security analysis and supply-chain audits run 100% free on public repositories, providing public proof of code quality and supply-chain integrity.",
+        "Public Zero-Day Disclosure: CodeQL findings and Scorecard vulnerabilities on public branches are visible to anyone, exposing unpatched flaws before release.",
+        "Medium",
+        "Enable GitHub Private Vulnerability Reporting for external bug submissions. Triage and patch security flaws in private security advisories before merging to public main.",
+        "Keep codeql.yml and scorecard.yml active. Publish SARIF alerts directly to GitHub Security tab to prove enterprise-grade security posture.",
+        "Viable for GA (Public Security Attestation)"
+    ),
+    (
+        11,
+        "license-builder.yml",
+        "License & Legal Compliance Builder",
+        "Scans all vendored third-party dependencies (V8, OpenSSL, zlib, libuv, etc.) and regenerates the consolidated LICENSE file.",
+        "Consolidated LICENSE file is published with public release distributions, fulfilling legal attribution requirements for open-source software.",
+        "Public Copyright Infringement Liability: In an open-source release, distributing binaries without complete copyright notices for vendored dependencies risks legal action.",
+        "Low",
+        "Execute license-builder.yml as a mandatory blocking release gate prior to cutting any public release tag or binary distribution.",
+        "Keep license-builder.yml active. Verify LICENSE file against software bill of materials (SBOM) generated during release packaging.",
+        "Viable for GA (Mandatory Legal Gate)"
+    ),
+    (
+        12,
+        "test-internet.yml",
+        "Public Internet Network Infrastructure",
+        "Standard GitHub-hosted runners execute live outbound HTTP/HTTPS/DNS integration tests against public internet endpoints.",
+        "Validates real-world networking capabilities of the release binaries against public DNS root servers and live endpoints under real internet conditions.",
+        "External Network Flakiness: Public DNS outages, CDN latency, or upstream rate limits (e.g. to nodejs.org or public DNS) could cause intermittent build failures.",
+        "Low",
+        "Wrap external network test suites with retry logic and timeout guards. Re-dispatch independently via workflow_dispatch if transient failures occur.",
+        "Retain test-internet.yml as a gating pipeline for release candidates, testing against resilient public endpoints.",
+        "Viable for GA (Live Network Validation)"
+    )
+]
+
+COL_WIDTHS = {
+    1: 6,
+    2: 30,
+    3: 35,
+    4: 35,
+    5: 35,
+    6: 35,
+    7: 20,
+    8: 35,
+    9: 35,
+    10: 25
+}
+
+
+def add_sheet_to_workbook(filepath: str):
+    print(f"Opening {filepath}...")
+    try:
+        wb = openpyxl.load_workbook(filepath)
+    except Exception as e:
+        print(f"Error opening {filepath}: {e}")
+        return
+
+    sheet_name = "public_oss_risk_assessment"
+    if sheet_name in wb.sheetnames:
+        del wb[sheet_name]
+
+    ws = wb.create_sheet(title=sheet_name)
+
+    # Header styling
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    border_thin = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+
+    # Write Headers
+    for c_idx, h_text in enumerate(HEADERS, 1):
+        cell = ws.cell(row=1, column=c_idx, value=h_text)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = border_thin
+
+    ws.row_dimensions[1].height = 45
+
+    # Zebra fill
+    alt_fill = PatternFill(start_color="F2F5F9", end_color="F2F5F9", fill_type="solid")
+    data_font = Font(name="Calibri", size=10)
+
+    # Write Data
+    for r_idx, row_data in enumerate(ROWS, 2):
+        ws.row_dimensions[r_idx].height = 80
+        is_even = (r_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+            cell.font = data_font
+            cell.border = border_thin
+            if c_idx in [1, 7, 10]:
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+            if is_even:
+                cell.fill = alt_fill
+
+    # Set Column Widths
+    for c_idx, width in COL_WIDTHS.items():
+        col_letter = openpyxl.utils.get_column_letter(c_idx)
+        ws.column_dimensions[col_letter].width = width
+
+    try:
+        wb.save(filepath)
+        print(f"Successfully added '{sheet_name}' to {filepath}")
+    except PermissionError:
+        print(f"Notice: {filepath} is locked by another process (e.g. Excel).")
+
+
+def main():
+    targets = [
+        "workflow-fixes/nodejs_pipeline_result.xlsx",
+        "workflow-fixes/node_pipeline_result.xlsx",
+        "workflow-fixes/pipeline_result.xlsx"
+    ]
+    for t in targets:
+        add_sheet_to_workbook(t)
+
+
+if __name__ == "__main__":
+    main()
