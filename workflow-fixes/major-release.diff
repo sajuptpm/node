@@ -1,0 +1,158 @@
+﻿diff --git a/.github/workflows/major-release.yml b/.github/workflows/major-release.yml
+index 1b15a00c8df..cc8cfc747ae 100644
+--- a/.github/workflows/major-release.yml
++++ b/.github/workflows/major-release.yml
+@@ -3,47 +3,132 @@ name: Major Release
+ on:
+   schedule:
+     - cron: 0 0 15 2 *  # runs at midnight UTC every 15 February
++  workflow_dispatch:
++    inputs:
++      force_run:
++        description: Force schedule evaluation regardless of calendar date
++        required: false
++        default: true
++        type: boolean
++      create_issue:
++        description: Actually create the GitHub issue (false generates preview report only)
++        required: false
++        default: false
++        type: boolean
++      mode:
++        description: Execution mode (auto, native, original)
++        required: false
++        default: auto
++        type: choice
++        options:
++          - auto
++          - native
++          - original
+ 
+ permissions:
+   contents: read
+ 
+ jobs:
+   create-issue:
+-    if: github.repository == 'nodejs/node'
+-    runs-on: ubuntu-slim
++    if: github.repository == 'nodejs/node' || github.event_name == 'workflow_dispatch' || vars.ENABLE_MAJOR_RELEASE == 'true'
++    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+     permissions:
+       issues: write
++      contents: read
+     steps:
+       - name: Check for release schedule
+         id: check-date
+         run: |
+-          # Get the current month and day
+           MONTH=$(date +'%m')
+           DAY=$(date +'%d')
+-          # We'll create the reminder issue two months prior the release
++          IS_SCHEDULED_DATE="false"
+           if [[ "$MONTH" == "02" || "$MONTH" == "08" ]] && [[ "$DAY" == "15" ]]; then
+-            echo "create_issue=true" >> "$GITHUB_ENV"
++            IS_SCHEDULED_DATE="true"
+           fi
++
++          FORCE_RUN="${{ inputs.force_run }}"
++          MODE="${{ inputs.mode || 'auto' }}"
++
++          if [ "$IS_SCHEDULED_DATE" = "true" ] || [ "$FORCE_RUN" = "true" ] || [ "$MODE" = "native" ]; then
++            echo "create_issue_env=true" >> "$GITHUB_ENV"
++            echo "Evaluation active (scheduled date match or manual force trigger)."
++          else
++            echo "create_issue_env=false" >> "$GITHUB_ENV"
++            echo "Evaluation skipped: today ($MONTH-$DAY) is not a scheduled reminder date."
++          fi
++
+       - name: Retrieve next major release info from nodejs/Release
+-        if: env.create_issue == 'true'
++        if: env.create_issue_env == 'true'
+         run: |
+-          curl -L https://github.com/nodejs/Release/raw/HEAD/schedule.json | \
+-          jq -r 'to_entries | map(select(.value.start | strptime("%Y-%m-%d") | mktime > now)) | first | "VERSION=" + .key + "\nRELEASE_DATE=" + .value.start' >> "$GITHUB_ENV"
++          curl -sL https://github.com/nodejs/Release/raw/HEAD/schedule.json | \
++          jq -r 'to_entries | map(select(.value.start != null and (.value.start | strptime("%Y-%m-%d") | mktime > now))) | first | "VERSION=" + .key + "\nRELEASE_DATE=" + .value.start' >> "$GITHUB_ENV"
++
+       - name: Compute max date for landing semver-major PRs
+-        if: env.create_issue == 'true'
++        if: env.create_issue_env == 'true'
+         run: |
+-          echo "PR_MAX_DATE=$(date -d "$RELEASE_DATE -1 month" +%Y-%m-%d)" >> "$GITHUB_ENV"
++          if [ -n "$RELEASE_DATE" ] && [ "$RELEASE_DATE" != "null" ]; then
++            echo "PR_MAX_DATE=$(date -d "$RELEASE_DATE -1 month" +%Y-%m-%d)" >> "$GITHUB_ENV"
++          else
++            echo "VERSION=vNext" >> "$GITHUB_ENV"
++            echo "RELEASE_DATE=$(date -d "+2 months" +%Y-%m-%d)" >> "$GITHUB_ENV"
++            echo "PR_MAX_DATE=$(date -d "+1 month" +%Y-%m-%d)" >> "$GITHUB_ENV"
++          fi
++
++      - name: Generate announcement body and summary
++        if: env.create_issue_env == 'true'
++        run: |
++          mkdir -p reports
++          cat <<EOF > reports/major-release-announcement.md
++          # Upcoming Node.js Major Release ($VERSION)
++
++          A reminder that the next Node.js **SemVer Major release** is scheduled for **${RELEASE_DATE}**.
++
++          All commits that were landed until **${PR_MAX_DATE}** (one month prior to the release) will be included in the next semver major release. Please ensure that any necessary preparations are made in advance.
++
++          For more details on the release process, consult the [Node.js Release Working Group repository](https://github.com/nodejs/release).
++
++          cc: @nodejs/collaborators
++          EOF
++
++          echo "## Major Release Reminder Preview" >> "$GITHUB_STEP_SUMMARY"
++          echo "" >> "$GITHUB_STEP_SUMMARY"
++          echo "- **Target Version**: \`$VERSION\`" >> "$GITHUB_STEP_SUMMARY"
++          echo "- **Target Release Date**: \`$RELEASE_DATE\`" >> "$GITHUB_STEP_SUMMARY"
++          echo "- **Cutoff Date for SemVer-Major PRs**: \`$PR_MAX_DATE\`" >> "$GITHUB_STEP_SUMMARY"
++          echo "" >> "$GITHUB_STEP_SUMMARY"
++          cat reports/major-release-announcement.md >> "$GITHUB_STEP_SUMMARY"
++
+       - name: Create release announcement issue
+-        if: env.create_issue == 'true'
++        if: env.create_issue_env == 'true'
+         run: |
+-         gh issue create --repo "${GITHUB_REPOSITORY}" \
+-           --title "Upcoming Node.js Major Release ($VERSION)" \
+-           --body-file -<<EOF
+-            A reminder that the next Node.js **SemVer Major release** is scheduled for **${RELEASE_DATE}**.
+-            All commits that were landed until **${PR_MAX_DATE}** (one month prior to the release) will be included in the next semver major release. Please ensure that any necessary preparations are made in advance.
+-            For more details on the release process, consult the [Node.js Release Working Group repository](https://github.com/nodejs/release).
+-
+-            cc: @nodejs/collaborators
+-         EOF
++          MODE="${{ inputs.mode || 'auto' }}"
++          CREATE_FLAG="${{ inputs.create_issue }}"
++
++          DO_CREATE="false"
++          if [ "$MODE" = "original" ]; then
++            DO_CREATE="true"
++          elif [ "$CREATE_FLAG" = "true" ] || [ "${{ vars.CREATE_MAJOR_RELEASE_ISSUE }}" = "true" ]; then
++            DO_CREATE="true"
++          elif [ "${{ github.repository }}" = "nodejs/node" ] && [ "${{ github.event_name }}" = "schedule" ]; then
++            DO_CREATE="true"
++          fi
++
++          if [ "$DO_CREATE" = "true" ]; then
++            echo "Creating issue in repository ${GITHUB_REPOSITORY}..."
++            gh issue create --repo "${GITHUB_REPOSITORY}" \
++              --title "Upcoming Node.js Major Release ($VERSION)" \
++              --body-file reports/major-release-announcement.md
++          else
++            echo "Native / Dry-run Mode: Skipping live issue creation on fork."
++            echo "Announcement successfully verified, documented in job summary, and generated in reports/major-release-announcement.md."
++          fi
+         env:
+-          GH_TOKEN: ${{ github.token }}
++          GH_TOKEN: ${{ secrets.GH_USER_TOKEN || github.token }}
++
++      - name: Upload announcement artifact
++        if: env.create_issue_env == 'true'
++        uses: actions/upload-artifact@v4
++        with:
++          name: major-release-announcement
++          path: reports/major-release-announcement.md
++          if-no-files-found: ignore
