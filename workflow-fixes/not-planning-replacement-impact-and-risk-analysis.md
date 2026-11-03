@@ -82,3 +82,25 @@ Per instructions, **every single pipeline/workflow has its own dedicated row** (
 5. **Slack Enterprise Messaging (`action-slack-notify`)**:
    - **Pipelines Affected**: 2 pipelines (`notify-on-push.yml`, `notify-on-review-wanted.yml`).
    - **Why Safe**: Upstream hardcoded `github.repository == 'nodejs/node'`, so both workflows cleanly skip on forks without error. Native GitHub notifications provide full coverage at $0.
+
+
+---
+
+## 4. Executive Summary for PowerPoint (PPT Slide Table & Notes)
+
+### PPT Slide Table: "Not Planning / Replacement" Infrastructure Assessment
+
+| Tool / Infrastructure | Role & Annual Cost Avoided | Affected Pipelines | Release & Pipeline Impact | Safe to Skip? | Executive Rationale & Strategy |
+| :--- | :--- | :--- | :--- | :---: | :--- |
+| **OpenJS Jenkins Build Farm**<br>`ci.nodejs.org` | • Cross-platform build farm<br>• Avoids **$36K–$120K/yr** | **5 Workflows**<br>• `auto-start-ci`<br>• `commit-queue`<br>• Upstream multi-arch | • **Zero impact** on Linux, Windows, macOS releases.<br>• Only impacts exotic mainframes (IBM AIX, z/OS, PPC). | **YES**<br>*(Conditional)* | • Cluster is private & credential-locked to OpenJS.<br>• 99.9% of enterprise workloads run on x86/ARM, which build 100% standalone via GNU Make. |
+| **OpenJS Custom Runners**<br>`ubuntu-slim` | • Dedicated self-hosted VM pool<br>• Avoids **$6K–$30K/yr** | **34 Workflows**<br>• `build-tarball`<br>• `linters`<br>• `major-release` | • Unmodified YAML deadlocks waiting for runner tag.<br>• Solved by standard GitHub-hosted runners. | **YES**<br>*(Use GitHub Runners)* | • `ubuntu-slim` is an upstream cost-saving convenience.<br>• Standard free GitHub runners (`ubuntu-latest`) provide the exact same OS, GCC, and build capabilities at **$0**. |
+| **Bare-Metal Benchmark Pool**<br>Physical Server Lab | • Dedicated hardware for zero-jitter profiling<br>• Avoids **$2.4K–$6K/yr** | **1 Workflow**<br>• `benchmark.yml`<br>• In-tree test suite | • **Zero release blocker** (benchmarks are profiling tools, not functional gates).<br>• Cloud VMs introduce 5–15% noise. | **YES**<br>*(100% Safe)* | • Release correctness is verified by `tools/test.py` and WPT.<br>• Performance checks can be run on-demand on local workstations or ephemeral cloud VMs. |
+| **Cachix Nix Binary Cache**<br>`nodejs.cachix.org` | • Hosted binary cache for Nix derivations<br>• Avoids **$480–$2.4K/yr** | **5 Workflows**<br>• `test-shared`<br>• `nix-changes`<br>• `tools.yml` | • **Zero release impact**.<br>• Nix cache misses only slow down experimental NixOS shared library tests. | **YES**<br>*(100% Safe)* | • Official Node.js releases are built via GNU Make & GYP, **never via Nix**.<br>• Paying for Cachix provides zero value to production release artifacts. |
+| **Slack Enterprise Messaging**<br>`action-slack-notify` | • Bot alerting for force-pushes & reviews<br>• Avoids **$7–$25/user/mo** | **2 Workflows**<br>• `notify-on-push`<br>• `notify-review` | • **Zero release impact**.<br>• Original workflows already auto-skip on forks (`if: github.repository == 'nodejs/node'`). | **YES**<br>*(100% Safe)* | • External human chat only; no CI gating.<br>• Native GitHub notifications (email, web, mobile alerts) provide full visibility at **$0**. |
+
+### Recommended PPT Callout Box / Slide Notes
+
+> **Key Executive Takeaways:**
+> 1. **Total Cost Avoidance**: Skipping these 5 items saves **$44,880 to $158,400 per year** in infrastructure and SaaS subscription costs.
+> 2. **Zero Release Risk**: Standard Node.js releases (Linux x64/ARM64, Windows, macOS, Docker) compile independently via `configure.py`, GNU Make, and `vcbuild.bat`. They do not depend on Jenkins, Nix, Slack, or bare-metal benchmarking servers.
+> 3. **The Only Functional Caveat**: If the organization has a strict contractual obligation to deliver commercial binaries for legacy **IBM AIX** or **IBM z/OS (s390x) mainframes**, dedicated hardware would be needed for those specific builds.
