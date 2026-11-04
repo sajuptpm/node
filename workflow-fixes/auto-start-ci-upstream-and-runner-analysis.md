@@ -1,13 +1,15 @@
 # Auto Start CI: Architecture, Upstream Operations & Runner Guide
 
-## Executive Summary
+## Executive Summary & Direct Q&A
 
-| Topic | Key Finding / Recommendation |
-| :--- | :--- |
-| **Pipeline Purpose** | Automatically scans open pull requests for CI approval labels (`request-ci`, `resume-ci`), checks whether the build cluster is available and below workload capacity, and triggers comprehensive testing across platforms. |
-| **Upstream Operating Cost** | **$0.00 / year** in commercial software subscriptions. The Jenkins controller, mainframes (AIX, s390x), and cloud VMs are 100% sponsored and donated in-kind to the OpenJS Foundation. |
-| **Need for Big Modifications?** | **NO.** Running this workflow on either **Local Jenkins** or **Customer-Specific Self-Hosted Runners** does **not** require architectural re-engineering or big modifications. It only requires adjusting target credentials and routing (~5 to 10 configuration lines). |
-| **Fork Deployment Cost** | **$0.00 / year** using free open-source Jenkins or native GitHub Actions self-hosted runners. |
+| Question | Short Answer | Details / Section |
+| :--- | :--- | :--- |
+| **What does this pipeline do?** | Automated queue manager & test dispatcher | Scans approved, conflict-free PRs with label `request-ci`, checks Jenkins cluster capacity, and triggers broad cross-platform tests. (See [Section 1](#1-what-this-pipeline-does)) |
+| **How does upstream run it?** | 5-minute cron on GitHub Actions | Dispatches to the OpenJS Jenkins cluster (`ci.nodejs.org`) via `@node-core/utils`. (See [Section 2](#2-how-upstream-operates--funds-it)) |
+| **How much is upstream paying?** | **$0.00 / year** | Zero software subscriptions. Hardware and compute (AIX, z/OS, ARM, macOS, Windows) are 100% donated/sponsored. (See [Section 2.2](#22-in-kind-hardware--cloud-sponsorships)) |
+| **Should I do any big modification for Local Jenkins?** | **NO** (Minimal changes: < 10 lines) | Change repo guard, add 2 GitHub secrets (`JENKINS_USER`, `JENKINS_TOKEN`), set `.ncurc.json` URL, and create 1 Jenkins job. (See [Section 3.1](#31-scenario-a-running-on-local-jenkins)) |
+| **Should I do any big modification for Customer Self-Hosted Runners?** | **NO** (Even simpler: removes Jenkins) | Tag the runner `runs-on: [self-hosted, customer-lab]` and trigger native GitHub Actions tests on PR label. (See [Section 3.2](#32-scenario-b-running-on-customer-specific-self-hosted-runners)) |
+| **What is the $1,200 in the planning table?** | Theoretical planning reserve | A $100/mo reserve *only* if rare enterprise mainframes (AIX cloud) are contractually demanded. For standard Linux/Win/macOS/ARM64, cost is **$0.00**. (See [Section 5](#5-explanation-of-the-1200-planning-table-entry)) |
 
 ---
 
@@ -15,7 +17,7 @@
 
 The `auto-start-ci.yml` pipeline functions as an **automated queue controller and test dispatcher**. 
 
-In high-volume repositories like Node.js (hundreds of PRs each week), running deep cross-platform integration tests on every commit push would overwhelm hardware clusters. Instead, the project requires collaborator approval before triggering broad tests.
+In high-volume open-source projects like Node.js (which receive dozens of PRs and hundreds of commits every week), executing full cross-platform builds and test suites on every single commit push would quickly overwhelm physical and cloud infrastructure. Instead, the project requires collaborator approval before triggering comprehensive testing.
 
 ```mermaid
 sequenceDiagram
@@ -40,14 +42,14 @@ sequenceDiagram
     end
 ```
 
-### Detailed Step-by-Step Flow:
+### Step-by-Step Technical Flow:
 1. **Queue Inspection (`get-prs-for-ci`)**:
-   - Runs every 5 minutes on a GitHub-hosted runner (`ubuntu-latest` / `ubuntu-slim`).
-   - Uses the GitHub CLI (`gh pr list`) to query open pull requests that meet three criteria:
+   - Runs every 5 minutes (`cron: 3/5 * * * *`) on a lightweight GitHub-hosted runner (`ubuntu-latest` / `ubuntu-slim`).
+   - Uses the GitHub CLI (`gh pr list`) to query open pull requests matching:
      - State is approved (`review:approved`).
      - Labeled with `request-ci` or `resume-ci`.
      - Git merge status is conflict-free (`mergeable == "MERGEABLE"`).
-   - Groups matching PR numbers into a batch (default up to 5 PRs).
+   - Batches matching PR numbers (up to `AUTO_START_CI_BATCH_SIZE`, default 5).
 
 2. **Cluster Health & Workload Throttling (`start-ci`)**:
    - For each matching PR, executes `tools/actions/start-ci.sh`.
@@ -84,16 +86,14 @@ The upstream build farm ([`ci.nodejs.org`](https://ci.nodejs.org/)) tests esoter
 
 ---
 
-## 3. Modifications Required for Fork Implementations
+## 3. Runner Implementation Guide: Are Big Modifications Needed?
 
-### Direct Question: "Should I do any big modification if run on customer-specific self-hosted runners or local Jenkins?"
-
-### Answer: **NO big modifications are required.**
+### Direct Answer: **NO big modifications are needed.**
 You do **not** need to rewrite the architecture, redesign test scripts, or license expensive orchestration platforms. The core logic remains intact; you only adjust endpoint URLs and credentials.
 
 ---
 
-### Scenario A: Running on Local Jenkins
+### 3.1 Scenario A: Running on Local Jenkins
 
 If your team wants to retain the exact upstream Jenkins workflow:
 
@@ -131,11 +131,11 @@ flowchart LR
      make -j$(nproc) test
      ```
 * **Effort Required**: ~1 to 2 hours of setup.
-* **Software Cost**: **$0.00**.
+* **Software Cost**: **$0.00** (Jenkins Community Edition is 100% free and open-source).
 
 ---
 
-### Scenario B: Running on Customer-Specific Self-Hosted Runners (GitHub Actions Native)
+### 3.2 Scenario B: Running on Customer-Specific Self-Hosted Runners
 
 If you do not want to maintain a Jenkins server and prefer running directly on **customer-specific self-hosted physical machines or VMs**:
 
@@ -182,19 +182,34 @@ Instead of dispatching to an external Jenkins API, the workflow dispatches direc
 
 | Evaluation Metric | Option 1: Local Jenkins | Option 2: Self-Hosted GitHub Runners (Preferred) |
 | :--- | :--- | :--- |
-| **Modification Scope** | **Minimal** (Set 2 secrets + Jenkins URL) | **Low** (Configure `runs-on: [self-hosted]`) |
-| **External Servers Needed** | Yes (Dedicated Jenkins Master VM/Container) | **None** (GitHub Actions coordinates everything) |
-| **Maintenance Overhead** | Requires maintaining Jenkins plugins, OS updates, backups | **Zero** (Runner auto-updates via GitHub daemon) |
+| **Big Modifications Needed?** | **No** (Set 2 secrets + Jenkins URL) | **No** (Tag runner `[self-hosted]`) |
+| **Separate Master VM Needed?** | Yes (Requires Jenkins Master) | **None** (GitHub Actions coordinates everything) |
+| **Maintenance Overhead** | Moderate (Maintain Jenkins server/plugins) | **Zero** (Runner auto-updates via GitHub daemon) |
 | **Software Licensing Cost** | **$0.00** (Open Source) | **$0.00** (Included with GitHub) |
 | **Platform Support** | Any OS (AIX, z/OS, Linux, Win, macOS) | Linux (x64/ARM), Windows, macOS |
 | **Suitability for Enterprise Fork** | Best if customer requires esoteric mainframes (AIX) | **Best for standard Linux/Windows/ARM environments** |
 
 ---
 
-## 5. Conclusion & Decision Matrix
+## 5. Explanation of the $1,200 Planning Table Entry
+
+In the infrastructure estimation table (`workflow-fixes/infra_tool_estimate.xlsx` / `Sheet1`):
+
+| Column | Recorded Value | Engineering Meaning |
+| :--- | :--- | :--- |
+| **Pipeline** | `Auto Start CI` (`auto-start-ci.yml`) | Automated PR CI trigger |
+| **Infra / Tool** | `OpenJS Jenkins Build Farm upstream` | Upstream build cluster |
+| **Yearly Cost (Vendor Published)** | **`$0`** | Upstream pays $0; hardware is sponsored |
+| **Yearly Cost (Requires Vendor Quote)** | **`$1,200`** | **Theoretical planning reserve** ($100/mo) in case an enterprise customer contractually demanded testing on proprietary cloud mainframes (e.g. IBM AIX cloud instances). |
+| **Remarks** | *"remove if only standard Linux/Windows/ARM64 are supported."* | Explicitly instructs that if you only support standard platforms, delete this line ($0). |
+| **Preferred Alternate Cost** | **`$0`** | Replaced by customer-specific self-hosted runners or GitHub Actions native runners. |
+
+---
+
+## 6. Conclusion & Recommendation for Downstream Enterprise Forks
 
 1. **Upstream Reality**: Upstream Node.js pays **$0** for subscriptions because GitHub Actions provides free open-source runners and hardware partners donate all physical nodes.
-2. **The $1,200 Cost in Planning Tables**: This was purely a theoretical planning reserve in case a customer contractually demanded dedicated cloud mainframe hosting (such as IBM AIX cloud instances). For standard Linux, Windows, macOS, and ARM64 platforms, the real cost is **$0.00**.
-3. **Implementation Verdict**:
-   - If your fork only needs standard servers: Use **Customer-Specific Self-Hosted GitHub Runners**. It requires **zero big modifications**, eliminates the need to run Jenkins, and costs **$0.00**.
-   - If you already have a team Jenkins instance: Connect `auto-start-ci` in under 15 minutes by adding your Jenkins URL and credentials.
+2. **No Big Modifications**: Neither Local Jenkins nor Customer-Specific Self-Hosted Runners require architectural overhauls. 
+3. **Best Practice Verdict**:
+   - For standard Linux, Windows, macOS, and ARM64 releases: **Use Customer-Specific Self-Hosted GitHub Runners** or native GitHub Actions. This costs **$0.00**, eliminates the Jenkins maintenance burden, and requires under 2 hours of setup.
+   - For legacy or mainframe support (AIX): **Use a local Docker Jenkins** container with `@node-core/utils` pointing to your internal URL ($0 software cost).
